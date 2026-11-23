@@ -1,6 +1,7 @@
 import {DatabaseSync} from 'node:sqlite'
 import {mkdirSync} from 'node:fs'
 import {dirname} from 'node:path'
+import topicTitles from './topic-titles.json' with {type:'json'}
 
 export function openDatabase(path = process.env.DB_PATH || 'private/app.sqlite') {
   if (path !== ':memory:') mkdirSync(dirname(path), {recursive:true,mode:0o700})
@@ -29,6 +30,7 @@ export function openDatabase(path = process.env.DB_PATH || 'private/app.sqlite')
     CREATE UNIQUE INDEX IF NOT EXISTS one_active_exam ON attempts(student) WHERE finished IS NULL;
     CREATE TABLE IF NOT EXISTS limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
   `)
-  for (let i = 1; i <= 9; i++) db.prepare('INSERT OR IGNORE INTO topics VALUES (?,?)').run(i,`Tema ${i}`)
+  const topic = db.prepare('INSERT INTO topics VALUES (?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title WHERE title=?')
+  topicTitles.forEach((title,index)=>topic.run(index+1,title,`Tema ${index+1}`))
   return db
 }
