@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {once} from 'node:events'
+import {mkdtempSync, rmSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
 import {openDatabase} from '../server/db.js'
 import {app} from '../server/index.js'
 import {grade, normalize, selectQuestions} from '../server/exam.js'
@@ -39,7 +42,9 @@ test('Nota con blancos, penalización, umbral y límites',()=>{
   assert.equal(grade(items,answers(20,0)).grade,10)
 })
 test('Integración HTTP de sesión, recuperación, corrección, permisos y versiones',async t=>{
-  const db=openDatabase(':memory:')
+  const directory=mkdtempSync(join(tmpdir(),'tic-exam-test-'))
+  const database=join(directory,'test.sqlite')
+  let db=openDatabase(database)
   const code='synthetic-secret-code'
   const hash=hashCode(code)
   const add=db.prepare('INSERT INTO students VALUES (?,?,?,?,?,?)')
@@ -50,11 +55,19 @@ test('Integración HTTP de sesión, recuperación, corrección, permisos y versi
   addStudent('d','Duo','Igual',4)
   for (const q of bank) db.prepare('INSERT INTO questions VALUES (?,?,?)').run(q.id,q.version,JSON.stringify(q))
   const origin='https://example.test'
-  const server=app({db,teacherHash:hash,origin})
-  t.after(()=>{server.close();db.close()})
-  server.listen(0,'127.0.0.1')
-  await once(server,'listening')
-  const base='http://127.0.0.1:'+server.address().port+'/api'
+  let server
+  let base
+  const start=async()=>{
+    server=app({db,teacherHash:hash,origin})
+    server.listen(0,'127.0.0.1')
+    await once(server,'listening')
+    base='http://127.0.0.1:'+server.address().port+'/api'
+  }
+  const stop=async()=>{
+    if (server?.listening) await new Promise((resolve,reject)=>server.close(error=>error ? reject(error) : resolve()))
+  }
+  t.after(async()=>{await stop();db.close();rmSync(directory,{recursive:true,force:true})})
+  await start()
   const query=(path,data,cookie,requestOrigin=origin)=>fetch(base+path,data===undefined?{headers:{cookie:cookie??''}}:{
     method:'POST',headers:{cookie:cookie??'',origin:requestOrigin,'Content-Type':'application/json'},body:JSON.stringify(data)
   })
@@ -82,6 +95,10 @@ test('Integración HTTP de sesión, recuperación, corrección, permisos y versi
   assert.equal((await query('/exam/'+exam.id+'/review',undefined,a)).status,409)
   assert.equal((await query('/exam/'+exam.id+'/answer',{index:0,choice:0},b)).status,404)
   assert.equal((await query('/exam/'+exam.id+'/answer',{index:0,choice:0},a)).status,200)
+  await stop()
+  db.close()
+  db=openDatabase(database)
+  await start()
   const resumed=await (await query('/exam',undefined,a)).json()
   assert.equal(resumed.id,exam.id)
   assert.equal(resumed.answers[0],0)
