@@ -6,7 +6,18 @@ const date = value => new Intl.DateTimeFormat('es-ES',{dateStyle:'medium',timeSt
 const score = value => value==null ? '—' : value.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})
 const letter = i => 'ABCD'[i]
 const expectedOrigin = import.meta.env.VITE_APP_ORIGIN
+const scriptApi = globalThis.google?.script?.run
 async function api(path, data) {
+  if (scriptApi) {
+    const storageKey='tic-session'
+    const token=sessionStorage.getItem(storageKey)
+    const result=await new Promise((resolve,reject)=>scriptApi.withSuccessHandler(resolve).withFailureHandler(reject)
+      .request(path,data===undefined?null:data,token))
+    if (result.error) throw Error(result.error)
+    if (result.token) sessionStorage.setItem(storageKey,result.token)
+    if (path==='/logout') sessionStorage.removeItem(storageKey)
+    return result.value
+  }
   const response = await fetch('/api'+path, data===undefined ? {} : {
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
   })
@@ -42,7 +53,7 @@ function App() {
     setPage(active?'exam':'topics')
   }
   useEffect(()=>{
-    if (expectedOrigin && location.origin!==expectedOrigin) return setPage('landing')
+    if (!scriptApi && expectedOrigin && location.origin!==expectedOrigin) return setPage('landing')
     if (location.hostname.endsWith('.github.io')) return setPage('landing')
     restore().catch(()=>setPage('login'))
   },[])
@@ -195,8 +206,8 @@ function App() {
   </>
 }
 
-function download(name, contents) {
-  const url=URL.createObjectURL(new Blob([contents],{type:'application/json'}))
+function download(name, contents, type='application/json') {
+  const url=URL.createObjectURL(new Blob([contents],{type}))
   const link=document.createElement('a')
   link.href=url
   link.download=name
@@ -314,7 +325,10 @@ function Teacher({topics}) {
           <label>Desde<input type="date" value={filters.start??''} onChange={e=>search('start',e.target.value)}/></label>
           <label>Hasta<input type="date" value={filters.end??''} onChange={e=>search('end',e.target.value)}/></label>
         </div>
-        <a className="button" href={'/api/teacher/results?format=csv&'+params}>Descargar CSV</a>
+        {scriptApi ? <button onClick={async()=>{
+          try {download('resultados.csv',await api('/teacher/results?format=csv&'+params),'text/csv;charset=utf-8')}
+          catch (e) {setError(e.message)}
+        }}>Descargar CSV</button> : <a className="button" href={'/api/teacher/results?format=csv&'+params}>Descargar CSV</a>}
       </section>
       {results && <>
         <Participation results={results} name={name}/>
