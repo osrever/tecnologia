@@ -43,6 +43,16 @@ function activarAlumnado() {
   console.log('Listados actualizados: grupo 3, ' + counts[3] + '; grupo 4, ' + counts[4] + '.')
 }
 
+function prepararProfesorado() {
+  requireOwner_()
+  const properties = props_()
+  if (properties.getProperty('TEACHER_HASH')) throw Error('Ya hay un código de administración configurado.')
+  const code = token_()
+  properties.setProperty('TEACHER_HASH', hash_(code))
+  properties.deleteProperty('TEACHER_FAILURES')
+  console.log('Código de administración: ' + code)
+}
+
 function prepararPrueba_() {
   const files = DriveApp.getFilesByName('banco-literal-autoevaluacion-tic.json')
   const fingerprint = '625befb7b8863cce5334c2a78f31aaba6bcc32257cfa1f1c0ffedc1cd5ed1331'
