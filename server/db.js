@@ -14,6 +14,7 @@ export function openDatabase(path = process.env.DB_PATH || 'private/app.sqlite')
       group_no INTEGER NOT NULL CHECK(group_no IN (3,4)), code_hash TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS student_name ON students(name_key);
+    CREATE TABLE IF NOT EXISTS ambiguous_names (name_key TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY, student TEXT REFERENCES students(id) ON DELETE CASCADE,
       role TEXT NOT NULL CHECK(role IN ('teacher','student')), expires INTEGER NOT NULL

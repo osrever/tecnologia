@@ -46,11 +46,17 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
   const cookie = (value,age) => `tic=${value}; HttpOnly; SameSite=Lax; Path=/api; Max-Age=${age}${secure?'; Secure':''}`
   const questionBank = () => all('SELECT * FROM questions').map(row=>({...decode(row.data),id:row.id,version:row.version}))
   const roster = () => all('SELECT id,first,last,group_no FROM students ORDER BY last,first')
-  function loginLimit(req, now) {
-    const key = digest(req.socket.remoteAddress ?? 'unknown')
+  function loginLimit(req, now, account) {
+    const remote = req.socket.remoteAddress ?? 'unknown'
     run('DELETE FROM limits WHERE expires <= ?',now)
-    run('INSERT INTO limits VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1',key,now+600_000)
-    if (get('SELECT count FROM limits WHERE key=?',key).count > 20) throw invalid(429,'Demasiados intentos. Vuelve a intentarlo en unos minutos.')
+    const increment = (label, limit) => {
+      const key = digest(label)
+      const result = get('INSERT INTO limits VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count',
+        key,now+600_000)
+      if (result.count > limit) throw invalid(429,'Demasiados intentos. Vuelve a intentarlo en unos minutos.')
+    }
+    increment('ip:'+remote,500)
+    increment('account:'+account,12)
   }
 
   return createServer(async (req,res)=>{
@@ -92,11 +98,14 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
       }
       if (['/api/login','/api/teacher/login'].includes(path) && method === 'POST') {
         const input = await body(req)
-        loginLimit(req,now)
         const code = typeof input.code === 'string' ? input.code.trim() : ''
         const role = path.includes('/teacher/') ? 'teacher' : 'student'
-        const people = role === 'student' ? all('SELECT id,code_hash FROM students WHERE name_key=?',
-          encode([normalize(input.first),normalize(input.last)])) : []
+        const first = typeof input.first === 'string' ? input.first.slice(0,120) : ''
+        const last = typeof input.last === 'string' ? input.last.slice(0,160) : ''
+        const name = encode([normalize(first),normalize(last)])
+        loginLimit(req,now,role === 'teacher' ? 'teacher' : name)
+        const people = role === 'student' ? all(`SELECT id,code_hash FROM students WHERE name_key=?
+          AND NOT EXISTS (SELECT 1 FROM ambiguous_names WHERE name_key=students.name_key)`,name) : []
         const hash = role === 'teacher' ? teacherHash : people.length===1 ? people[0].code_hash : null
         const dummy = '0'.repeat(32)+':'+'0'.repeat(64)
         if (code.length < 16 || code.length > 160 || !matches(code,hash ?? dummy) || !hash) {

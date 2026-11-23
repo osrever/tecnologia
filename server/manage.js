@@ -30,12 +30,19 @@ if (command==='teacher') {
     transaction(()=>{
       const existing = db.prepare('SELECT 1 FROM students WHERE name_key=?')
       const add = db.prepare('INSERT INTO students VALUES (?,?,?,?,?,?)')
+      const suspend = db.prepare('INSERT OR IGNORE INTO ambiguous_names VALUES (?)')
+      const revoke = db.prepare('DELETE FROM sessions WHERE student IN (SELECT id FROM students WHERE name_key=?)')
+      const unblock = db.prepare('DELETE FROM ambiguous_names WHERE name_key=?')
       for (const s of students) {
-        if (counts.get(key(s))!==1) {
+        const name = key(s)
+        if (counts.get(name)!==1) {
+          suspend.run(name)
+          revoke.run(name)
           rejected.push(s)
           continue
         }
-        if (existing.get(key(s))) continue
+        unblock.run(name)
+        if (existing.get(name)) continue
         const code = token()
         add.run(randomUUID(),s.first.trim(),s.last.trim(),key(s),s.group,hashCode(code))
         created.push({...s,code})
