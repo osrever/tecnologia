@@ -1,0 +1,9 @@
+{
+  "name": "autoevaluacion-tic-escrita",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=24"},
+  "scripts": {"dev":"vite","build":"vite build","start":"node server/index.js","test":"node --test"},
+  "dependencies": {"react":"^19.2.0","react-dom":"^19.2.0"},
+  "devDependencies": {"vite":"^7.2.0"}
+}
