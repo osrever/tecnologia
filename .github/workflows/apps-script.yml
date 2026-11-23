@@ -23,3 +23,8 @@ jobs:
           name: autoevaluacion-apps-script
           path: dist/apps-script
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: instalacion-en-un-archivo
+          path: dist/apps-script-un-archivo/Pegar-en-Codigo.gs.txt
+          if-no-files-found: error
