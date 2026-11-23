@@ -41,4 +41,4 @@ Las sesiones expiran a las 12 horas, se transmiten en cookies HttpOnly y tienen 
 
 Antes de incorporar alumnado real, acuerda con la Universidad la base jurídica, el aviso de privacidad, el proveedor de alojamiento, los plazos de conservación y el circuito de acceso, exportación y supresión. Limita el acceso al volumen, configura copias cifradas y prueba su restauración. Aplica el plan de supresión también a copias y exportaciones. Conserva el banco y los datos exclusivamente en almacenamiento privado.
 
-Las pruebas usan una base en memoria con filas sintéticas reservadas a pruebas. Cubren los dos grupos, la normalización, la distribución y el barajado, la fórmula, la sesión, la corrección, el historial, la revisión, la edición versionada, el CSV y el aislamiento de permisos.
+Las pruebas usan una base SQLite temporal y cuentas sintéticas reservadas a pruebas. Cubren los dos grupos, la normalización, la distribución y el barajado, la fórmula, la sesión, la corrección, el historial, la revisión, la edición versionada, el CSV y el aislamiento de permisos.
