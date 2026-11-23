@@ -25,6 +25,14 @@ const htmlParts = page.match(/[\s\S]{1,4096}/g).map(part=>JSON.stringify(part))
 const singleCode = readFileSync(resolve(out,'Code.gs'),'utf8')
   .replace("HtmlService.createHtmlOutputFromFile('Index')","HtmlService.createHtmlOutput(pageHtml_())")
 const singleSetup = `
+function prepararPrueba() {
+  const active = Session.getActiveUser().getEmail()
+  if (!active || active !== Session.getEffectiveUser().getEmail()) {
+    throw Error('Ejecuta esta función desde el editor con la cuenta propietaria.')
+  }
+  prepararPrueba_()
+}
+
 function prepararPrueba_() {
   const properties = props_()
   if (!properties.getProperty('BANK_FILE_ID')) {
