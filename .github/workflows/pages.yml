@@ -19,6 +19,7 @@ jobs:
       - run: npm test
       - run: npm run build
         env:
+          VITE_APP_URL: https://script.google.com/macros/s/AKfycbz9j0kzTSDHxUtQHrfNBOZj1FZMKCplR2QG-fs7wtDZoAWlvNteKZ-fXCCtqB6YsbfH3A/exec
           VITE_APP_ORIGIN: ${{ vars.APP_ORIGIN }}
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3

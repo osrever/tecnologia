@@ -6,6 +6,7 @@ const date = value => new Intl.DateTimeFormat('es-ES',{dateStyle:'medium',timeSt
 const score = value => value==null ? '—' : value.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})
 const letter = i => 'ABCD'[i]
 const expectedOrigin = import.meta.env.VITE_APP_ORIGIN
+const publicAppUrl = import.meta.env.VITE_APP_URL || expectedOrigin
 async function api(path, data) {
   const response = await fetch('/api'+path, data===undefined ? {} : {
     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)
@@ -92,7 +93,7 @@ function App() {
         {title('Práctica para el examen')}
         <p>Tecnologías para la Información y la Comunicación Escrita · 2710009</p>
         <p>Curso 2026–2027 · Grupos 3 y 4</p>
-        {expectedOrigin ? <a className="primary button" href={expectedOrigin}>Acceder a la aplicación</a> :
+        {publicAppUrl ? <a className="primary button" href={publicAppUrl}>Acceder a la aplicación</a> :
           <p className="notice">El acceso al alumnado se habilitará cuando esté configurado el servidor seguro y validado el banco de preguntas.</p>}
       </section>}
       {page==='login' && <section className="card access">
