@@ -4,7 +4,7 @@ import {openDatabase} from './db.js'
 import {normalize, validQuestion} from './exam.js'
 import {token, hashCode} from './auth.js'
 
-const [command, source, destination] = process.argv.slice(2)
+const [command, source] = process.argv.slice(2)
 if (command==='teacher') {
   const code = token()
   writeFileSync(source,JSON.stringify({code,hash:hashCode(code)},null,2),{mode:0o600,flag:'wx'})
@@ -25,11 +25,11 @@ if (command==='teacher') {
     const key = s => JSON.stringify([normalize(s.first),normalize(s.last)])
     const counts = new Map()
     for (const s of students) counts.set(key(s),(counts.get(key(s))??0)+1)
-    const created = []
+    let created = 0
     const rejected = []
     transaction(()=>{
       const existing = db.prepare('SELECT 1 FROM students WHERE name_key=?')
-      const add = db.prepare('INSERT INTO students VALUES (?,?,?,?,?,?)')
+      const add = db.prepare('INSERT INTO students VALUES (?,?,?,?,?)')
       const suspend = db.prepare('INSERT OR IGNORE INTO ambiguous_names VALUES (?)')
       const revoke = db.prepare('DELETE FROM sessions WHERE student IN (SELECT id FROM students WHERE name_key=?)')
       const unblock = db.prepare('DELETE FROM ambiguous_names WHERE name_key=?')
@@ -43,13 +43,11 @@ if (command==='teacher') {
         }
         unblock.run(name)
         if (existing.get(name)) continue
-        const code = token()
-        add.run(randomUUID(),s.first.trim(),s.last.trim(),key(s),s.group,hashCode(code))
-        created.push({...s,code})
+        add.run(randomUUID(),s.first.trim(),s.last.trim(),name,s.group)
+        created++
       }
-      writeFileSync(destination,JSON.stringify({created,ambiguous:rejected},null,2),{mode:0o600,flag:'wx'})
     })
-    console.log(`Altas: ${created.length}. Filas ambiguas: ${rejected.length}.`)
+    console.log(`Altas: ${created}. Filas ambiguas: ${rejected.length}.`)
   } else if (command==='bank') {
     const {topics,questions} = read(source)
     if (topics.length!==9 || new Set(topics.map(t=>t.id)).size!==9 ||
@@ -65,22 +63,11 @@ if (command==='teacher') {
       }
     })
     console.log(`Preguntas importadas: ${questions.length}.`)
-  } else if (command==='delete-student' || command==='reset-student') {
-    const studentId=source
-    if (!db.prepare('SELECT 1 FROM students WHERE id=?').get(studentId)) throw Error('No se encontró ese identificador.')
-    if (command==='delete-student') {
-      db.prepare('DELETE FROM students WHERE id=?').run(studentId)
-      db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-      console.log('Ficha, sesiones e intentos eliminados.')
-    } else {
-      const code=token()
-      transaction(()=>{
-        db.prepare('UPDATE students SET code_hash=? WHERE id=?').run(hashCode(code),studentId)
-        db.prepare('DELETE FROM sessions WHERE student=?').run(studentId)
-        writeFileSync(destination,JSON.stringify({id:studentId,code}),{mode:0o600,flag:'wx'})
-      })
-      console.log('Código renovado y sesiones revocadas.')
-    }
-  } else throw Error('Comandos: teacher, students, bank, delete-student, reset-student.')
+  } else if (command==='delete-student') {
+    const deleted = db.prepare('DELETE FROM students WHERE id=?').run(source)
+    if (!deleted.changes) throw Error('No se encontró ese identificador.')
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    console.log('Ficha, accesos, sesiones e intentos eliminados.')
+  } else throw Error('Comandos: teacher, students, bank, delete-student.')
   db.close()
 }

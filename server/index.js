@@ -46,17 +46,22 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
   const cookie = (value,age) => `tic=${value}; HttpOnly; SameSite=Lax; Path=/api; Max-Age=${age}${secure?'; Secure':''}`
   const questionBank = () => all('SELECT * FROM questions').map(row=>({...decode(row.data),id:row.id,version:row.version}))
   const roster = () => all('SELECT id,first,last,group_no FROM students ORDER BY last,first')
-  function loginLimit(req, now, account) {
-    const remote = req.socket.remoteAddress ?? 'unknown'
-    run('DELETE FROM limits WHERE expires <= ?',now)
-    const increment = (label, limit) => {
-      const key = digest(label)
-      const result = get('INSERT INTO limits VALUES (?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count',
-        key,now+600_000)
-      if (result.count > limit) throw invalid(429,'Demasiados intentos. Vuelve a intentarlo en unos minutos.')
+  let teacherFailures = 0
+  let teacherWindow = 0
+  const flattened = key => decode(key).join(' ')
+  const noMatch = 'No encontramos tu nombre en el listado de estudiantes. Comprueba que lo has escrito correctamente'
+  function findStudent(value) {
+    if (typeof value !== 'string' || value.length > 300) throw invalid(401,noMatch)
+    const parts = value.split(',').map(normalize)
+    if (parts.length > 2 || parts.some(part=>!part)) throw invalid(401,noMatch)
+    const matchesName = key => parts.length===2
+      ? key===encode([parts[1],parts[0]])
+      : flattened(key)===parts[0]
+    const people = all('SELECT id,name_key FROM students').filter(person=>matchesName(person.name_key))
+    if (people.length!==1 || all('SELECT name_key FROM ambiguous_names').some(row=>matchesName(row.name_key))) {
+      throw invalid(401,noMatch)
     }
-    increment('ip:'+remote,500)
-    increment('account:'+account,12)
+    return people[0].id
   }
 
   return createServer(async (req,res)=>{
@@ -98,23 +103,33 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
       }
       if (['/api/login','/api/teacher/login'].includes(path) && method === 'POST') {
         const input = await body(req)
-        const code = typeof input.code === 'string' ? input.code.trim() : ''
         const role = path.includes('/teacher/') ? 'teacher' : 'student'
-        const first = typeof input.first === 'string' ? input.first.slice(0,120) : ''
-        const last = typeof input.last === 'string' ? input.last.slice(0,160) : ''
-        const name = encode([normalize(first),normalize(last)])
-        loginLimit(req,now,role === 'teacher' ? 'teacher' : name)
-        const people = role === 'student' ? all(`SELECT id,code_hash FROM students WHERE name_key=?
-          AND NOT EXISTS (SELECT 1 FROM ambiguous_names WHERE name_key=students.name_key)`,name) : []
-        const hash = role === 'teacher' ? teacherHash : people.length===1 ? people[0].code_hash : null
-        const dummy = '0'.repeat(32)+':'+'0'.repeat(64)
-        if (code.length < 16 || code.length > 160 || !matches(code,hash ?? dummy) || !hash) {
-          throw invalid(401,'No se ha podido verificar el acceso.')
+        const studentId = role==='student' ? findStudent(input.name) : null
+        if (role==='teacher') {
+          if (now>=teacherWindow) {
+            teacherWindow = now+600_000
+            teacherFailures = 0
+          }
+          if (teacherFailures>=12) throw invalid(429,'Demasiados intentos. Vuelve a intentarlo en unos minutos.')
+          const code = typeof input.code==='string' ? input.code.trim() : ''
+          if (code.length<16 || code.length>160 || !matches(code,teacherHash)) {
+            teacherFailures++
+            throw invalid(401,'No se ha podido verificar el acceso.')
+          }
+          teacherFailures = 0
         }
         const sessionValue = token()
-        run('DELETE FROM sessions WHERE expires<=?',now)
-        if (sessionToken) run('DELETE FROM sessions WHERE token=?',digest(sessionToken))
-        run('INSERT INTO sessions VALUES (?,?,?,?)',digest(sessionValue),people[0]?.id ?? null,role,now+SESSION)
+        db.exec('BEGIN IMMEDIATE')
+        try {
+          run('DELETE FROM sessions WHERE expires<=?',now)
+          if (sessionToken) run('DELETE FROM sessions WHERE token=?',digest(sessionToken))
+          run('INSERT INTO sessions VALUES (?,?,?,?)',digest(sessionValue),studentId,role,now+SESSION)
+          if (studentId) run('INSERT INTO student_access (student,started) VALUES (?,?)',studentId,now)
+          db.exec('COMMIT')
+        } catch(error) {
+          db.exec('ROLLBACK')
+          throw error
+        }
         res.setHeader('Set-Cookie',cookie(sessionValue,SESSION/1000))
         return send({})
       }
@@ -157,9 +172,16 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
           const person = url.searchParams.get('student')
           const students = roster()
           const byId = new Map(students.map(s=>[s.id,s]))
+          const includesStudent = id => (!person || id===person) && (!group || String(byId.get(id).group_no)===group)
+          const attempts = all('SELECT student,started,topics FROM attempts WHERE started>=? AND started<?',start,end)
+            .filter(row=>includesStudent(row.student) && (!topic || decode(row.topics).includes(topic)))
           const rows = all('SELECT * FROM attempts WHERE finished>=? AND finished<? ORDER BY finished DESC',start,end)
-            .filter(row=>(!topic || decode(row.topics).includes(topic)) &&
-              (!person || row.student===person) && (!group || String(byId.get(row.student).group_no)===group))
+            .filter(row=>includesStudent(row.student) && (!topic || decode(row.topics).includes(topic)))
+          const events = all('SELECT student,started FROM student_access WHERE started>=? AND started<? ORDER BY started',start,end)
+            .filter(row=>includesStudent(row.student))
+          const participantIds = new Set(events.map(row=>row.student))
+          // Sessions predating the access log can be inferred from attempts.
+          for (const row of [...attempts,...rows]) participantIds.add(row.student)
           const results = rows.map(row=>({...summary(row), student:byId.get(row.student)}))
           if (url.searchParams.get('format')==='csv') {
             res.setHeader('Content-Type','text/csv; charset=utf-8')
@@ -170,12 +192,20 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
           }
           const questions = new Map()
           const concepts = new Map()
-          const practice = {}
+          const practice = Object.fromEntries(topics().map(({id})=>[id,{selected:0,answered:0,right:0,wrong:0}]))
+          for (const row of attempts) {
+            for (const id of decode(row.topics)) practice[id].selected++
+          }
           for (const row of rows) {
-            for (const id of decode(row.topics)) practice[id]=(practice[id]??0)+1
             const answers = decode(row.answers)
             decode(row.items).forEach((q,i)=>{
               if (topic && q.topic!==topic) return
+              if (answers[i]!=null) {
+                const stats = practice[q.topic]
+                stats.answered++
+                if (answers[i]===q.correct) stats.right++
+                else stats.wrong++
+              }
               for (const [map,key,label] of [[questions,q.id+':'+q.version,q.prompt],[concepts,q.topic+':'+q.concept,q.concept]]) {
                 const data = map.get(key) ?? {label,topic:q.topic,total:0,wrong:0,blank:0}
                 data.total++
@@ -185,9 +215,13 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
               }
             })
           }
-          const rank = map => [...map.values()].sort((a,b)=>b.wrong/b.total-a.wrong/a.total || b.total-a.total).slice(0,10)
+          const rank = map => {
+            const rate = q => q.wrong/(q.total-q.blank || 1)
+            return [...map.values()].filter(q=>q.wrong>0).sort((a,b)=>rate(b)-rate(a) || b.wrong-a.wrong).slice(0,10)
+          }
           const groups = [3,4].map(group=>{
             const exams = results.filter(r=>r.student.group_no===group)
+            const groupStudents = students.filter(s=>s.group_no===group && includesStudent(s.id))
             const scores = new Map()
             for (const r of exams) {
               const s=scores.get(r.student.id) ?? {total:0,count:0}
@@ -195,11 +229,27 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
               s.count++
               scores.set(r.student.id,s)
             }
-            return {group,attempts:exams.length,students:scores.size,
+            return {group,attempts:exams.length,enrolled:groupStudents.length,
+              students:groupStudents.filter(s=>participantIds.has(s.id)).length,
               average:exams.length ? exams.reduce((sum,r)=>sum+r.grade,0)/exams.length : null,
               studentAverage:scores.size ? [...scores.values()].reduce((sum,s)=>sum+s.total/s.count,0)/scores.size : null}
           })
-          return send({students,results,practice,groups,questions:rank(questions),concepts:rank(concepts)})
+          const madridDay = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Madrid'})
+          const byDay = new Map()
+          for (const event of events) {
+            const day = madridDay.format(event.started)
+            if (!byDay.has(day)) byDay.set(day,new Set())
+            byDay.get(day).add(event.student)
+          }
+          const daily = [...byDay].map(([day,ids])=>({day,students:ids.size}))
+          const individual = person && byId.has(person) ? {
+            ...byId.get(person),
+            ...get('SELECT min(started) firstAccess,max(started) lastAccess,count(*) sessions FROM student_access WHERE student=?',person),
+            started:get('SELECT count(*) total FROM attempts WHERE student=?',person).total,
+            results:all('SELECT * FROM attempts WHERE student=? AND finished IS NOT NULL ORDER BY finished DESC',person).map(summary)
+          } : null
+          return send({students,results,practice,groups,daily,individual,started:attempts.length,
+            questions:rank(questions),concepts:rank(concepts)})
         }
         throw invalid(404,'Operación no disponible.')
       }

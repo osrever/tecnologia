@@ -103,9 +103,8 @@ function App() {
           await api(teacher?'/teacher/login':'/login',data)
           await restore()
         })}}>
-          {!teacher && <><label>Nombre<input name="first" autoComplete="given-name" required maxLength={120}/></label>
-          <label>Apellidos<input name="last" autoComplete="family-name" required maxLength={160}/></label></>}
-          <label>{teacher?'Código de administración':'Código individual'}<input name="code" type="password" autoComplete="current-password" required maxLength={160}/></label>
+          {teacher ? <label key="teacher">Código de administración<input name="code" type="password" autoComplete="current-password" required maxLength={160}/></label> :
+            <label key="student">Nombre y apellidos<input name="name" autoComplete="name" required maxLength={300} aria-describedby="name-format"/><span id="name-format" className="muted">Escribe «Nombre Apellidos» o «Apellidos, Nombre».</span></label>}
           <button className="primary" disabled={busy}>Acceder</button>
         </form>
         <button className="text" onClick={()=>{setTeacher(!teacher);setError('')}}>{teacher?'Acceso del alumnado':'Acceso del profesorado'}</button>
@@ -162,8 +161,8 @@ function App() {
         <p>{result.topics.map(topicName).join(' · ')}</p>
         <div className={'result '+(result.passed?'passed':'failed')}><strong>{score(result.grade)}</strong><span>sobre 10 · {result.passed?'Aprobado':'Suspenso'}</span></div>
         <p>{result.right} aciertos · {result.wrong} fallos · {result.blank} en blanco · {Math.floor(result.duration/60)} min {result.duration%60} s</p>
-        <div className="actions"><button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Hacer otro examen</button>
-          <button onClick={()=>reviewPage(result.id)} disabled={busy}>Revisar respuestas</button><button onClick={historyPage} disabled={busy}>Ver mi progreso</button></div>
+        <div className="actions"><button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Realizar otra prueba</button>
+          <button onClick={()=>reviewPage(result.id)} disabled={busy}>Revisar respuestas</button><button onClick={historyPage} disabled={busy}>Consultar el historial</button><button onClick={logout} disabled={busy}>Cerrar sesión</button></div>
       </section>}
       {page==='review' && review && <>
         <div className="heading">{title('Revisión del examen')}<button onClick={historyPage} disabled={busy}>Ver mi progreso</button></div>
@@ -174,7 +173,7 @@ function App() {
             {letter(j)}. {option} {j===item.correct && <strong>· Respuesta correcta</strong>} {j===review.answers[i] && <strong>· Tu respuesta</strong>}
           </li>)}</ul><p>{item.explanation}</p><p className="muted">Referencia: {item.reference}</p>
         </article>)}
-        <button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Hacer otro examen</button>
+        <button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Realizar otra prueba</button>
       </>}
       {page==='history' && <>
         <div className="heading">{title('Mi progreso')}<button onClick={()=>setPage('topics')}>Elegir temas</button></div>
@@ -192,7 +191,7 @@ function App() {
       </>}
       {page==='teacher' && <Teacher topics={me.topics}/>}
     </main>
-    <footer className="shell bottom">Tecnologías para la Información y la Comunicación Escrita · 2026–2027</footer>
+    <footer className="shell bottom">Curso 2026–2027. Las notas son orientativas y no cuentan para la evaluación oficial.</footer>
   </>
 }
 
@@ -206,6 +205,43 @@ function download(name, contents) {
 }
 
 const fresh=()=>({topic:1,concept:'',prompt:'',options:['','','',''],correct:0,explanation:'',reference:'',difficulty:'media',status:'pendiente',active:false})
+
+const percentage = (part,total) => total ? Math.round(part*100/total)+' %' : '—'
+const average = rows => rows.length ? rows.reduce((sum,row)=>sum+row.grade,0)/rows.length : null
+
+function Participation({results,name}) {
+  const enrolled=results.groups.reduce((sum,g)=>sum+g.enrolled,0)
+  const participants=results.groups.reduce((sum,g)=>sum+g.students,0)
+  const person=results.individual
+  const individualResults=person?.results??[]
+  return <>
+    <p className="muted">Actividad formativa. Los accesos se atribuyen al nombre introducido y las notas son orientativas.</p>
+    <div className="metrics">{[
+      ['Estudiantes matriculados',enrolled],['Participantes',participants],['Participación',percentage(participants,enrolled)],
+      ['Pruebas iniciadas',results.started],['Pruebas completadas',results.results.length],
+      ['Pruebas completadas por participante',score(participants?results.results.length/participants:null)],
+      ['Nota media de las pruebas',score(average(results.results))]
+    ].map(([label,value])=><div className="card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    <section className="card section"><h2>Participación por grupo</h2>
+      {results.groups.map(g=><p key={g.group}>Grupo {g.group} · {g.students} de {g.enrolled} participantes ({percentage(g.students,g.enrolled)}) · {g.attempts} pruebas completadas · Nota media {score(g.average)} · Media de notas medias individuales {score(g.studentAverage)}</p>)}
+      <h2>Participantes por día</h2>
+      {results.daily.length ? results.daily.map(day=><div className="history-row" key={day.day}>
+        <span>{day.day.split('-').reverse().join('/')}</span>
+        <meter aria-label={'Participantes el '+day.day} min="0" max={participants} value={day.students}/><strong>{day.students}</strong>
+      </div>) : <p>No hay accesos registrados en este período.</p>}
+    </section>
+    {person && <section className="card section">
+      <h2>{person.first} {person.last} · Grupo {person.group_no}</h2>
+      <p>Primer acceso: {person.firstAccess==null?'—':date(person.firstAccess)} · Último acceso: {person.lastAccess==null?'—':date(person.lastAccess)}</p>
+      <p>{person.sessions} sesiones iniciadas · {person.started} pruebas iniciadas · {individualResults.length} completadas</p>
+      <p>Nota media: {score(average(individualResults))} · Mejor nota: {score(individualResults.length ? Math.max(...individualResults.map(r=>r.grade)) : null)}</p>
+      <p>Temas practicados: {[...new Set(individualResults.flatMap(r=>r.topics))].sort((a,b)=>a-b).map(name).join(' · ') || '—'}</p>
+      <h3>Evolución de resultados</h3>
+      {individualResults.map(r=><div className="history-row" key={r.id}><span>{date(r.finished)}</span>
+        <meter aria-label={'Nota de '+date(r.finished)} min="0" max="10" value={r.grade}/><strong>{score(r.grade)}</strong></div>)}
+    </section>}
+  </>
+}
 
 function Teacher({topics}) {
   const [tab,setTab]=useState('results')
@@ -281,19 +317,22 @@ function Teacher({topics}) {
         <a className="button" href={'/api/teacher/results?format=csv&'+params}>Descargar CSV</a>
       </section>
       {results && <>
-        <div className="metrics">{[['Estudiantes participantes',results.groups.reduce((n,g)=>n+g.students,0)],['Exámenes completados',results.results.length],
-          ...results.groups.map(g=>['Nota media de intentos · G'+g.group,score(g.average)])].map(([k,v])=><div className="card" key={k}><span>{k}</span><strong>{v}</strong></div>)}</div>
-        <section className="card section"><h2>Seguimiento por grupo</h2>
-          {results.groups.map(g=><p key={g.group}>Grupo {g.group} · {g.students} estudiantes · {g.attempts} intentos · Media de las notas medias individuales {score(g.studentAverage)}</p>)}
+        <Participation results={results} name={name}/>
+        <section className="card section">
           <h2>Intentos</h2>
           {results.results.length===0 ? <p>No hay intentos con estos filtros.</p> :
-            <div className="table-wrap" tabIndex="0" aria-label="Tabla de intentos"><table><thead><tr>{['Estudiante','Grupo','Fecha','Temas','Nota'].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{results.results.map(r=><tr key={r.id}><th scope="row">{r.student.last}, {r.student.first}</th><td>{r.student.group_no}</td><td>{date(r.finished)}</td><td>{r.topics.join(', ')}</td><td>{score(r.grade)}</td></tr>)}</tbody></table></div>}
+            <div className="table-wrap" tabIndex="0" aria-label="Tabla de intentos"><table><thead><tr>{['Estudiante','Grupo','Fecha','Temas','Nota','Duración'].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>
+            <tbody>{results.results.map(r=><tr key={r.id}><th scope="row">{r.student.last}, {r.student.first}</th><td>{r.student.group_no}</td><td>{date(r.finished)}</td><td>{r.topics.join(', ')}</td><td>{score(r.grade)}</td><td>{Math.floor(r.duration/60)} min {r.duration%60} s</td></tr>)}</tbody></table></div>}
         </section>
-        <section className="card section"><h2>Temas más practicados</h2>
-          {Object.entries(results.practice).sort((a,b)=>b[1]-a[1]).map(([id,count])=><p key={id}>{name(Number(id))} · {count} intentos</p>)}
+        <section className="card section"><h2>Estadísticas por tema</h2>
+          <div className="table-wrap" tabIndex="0" aria-label="Estadísticas por tema"><table>
+            <thead><tr>{['Tema','Selecciones','Respondidas','Correctas','Incorrectas'].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>
+            <tbody>{Object.entries(results.practice).map(([id,stats])=><tr key={id}><th scope="row">{name(Number(id))}</th>
+              <td>{stats.selected}</td><td>{stats.answered}</td><td>{percentage(stats.right,stats.answered)}</td>
+              <td>{percentage(stats.wrong,stats.answered)}</td></tr>)}</tbody>
+          </table></div>
           {['questions','concepts'].map((key,i)=><div key={key}><h2>{i?'Conceptos con mayor tasa de fallos':'Preguntas con mayor tasa de fallos'}</h2>
-            {results[key].map((q,j)=><p key={j}>{q.label} · {name(q.topic)} · {Math.round(q.wrong*100/q.total)} % de fallos ({q.wrong}/{q.total}) · {q.blank} en blanco</p>)}</div>)}
+            {results[key].map((q,j)=><p key={j}>{q.label} · {name(q.topic)} · {percentage(q.wrong,q.total-q.blank)} de fallos ({q.wrong}/{q.total-q.blank}) · {q.blank} en blanco</p>)}</div>)}
         </section>
       </>}
     </>}

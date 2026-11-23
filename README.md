@@ -12,7 +12,7 @@ npm test
 npm run build
 mkdir -m 700 -p private
 node server/manage.js teacher private/profesor.json
-node server/manage.js students private/alumnado.json private/entrega-codigos.json
+node server/manage.js students private/alumnado.json
 node server/manage.js bank private/banco.json
 npm start
 ```
@@ -25,9 +25,9 @@ Para un servidor con contenedores, ejecuta `docker build -t autoevaluacion-tic .
 
 ## Incorporar alumnado
 
-Prepara un JSON privado con una lista de objetos que contienen `first`, `last` y `group` (3 o 4). De la columna «APELLIDOS, NOMBRE» toma el texto anterior a la coma como apellidos y el posterior como nombre. Reúne ambos grupos en el mismo archivo y excluye las demás columnas. Ejecuta el comando de altas con un archivo de entrega nuevo. Las altas existentes se conservan. Las colisiones se devuelven para revisión y bloquean el acceso por ese nombre hasta que se importe un listado conjunto corregido. Revisa manualmente que una ficha preexistente corresponda a la persona que conserva el nombre una vez resuelta la colisión. Distribuye los códigos de forma individual mediante un canal institucional privado y borra el archivo de entrega cuando hayas terminado.
+Prepara un JSON privado con una lista de objetos que contienen `first`, `last` y `group` (3 o 4). De la columna «APELLIDOS, NOMBRE» toma el texto anterior a la coma como apellidos y el posterior como nombre. Reúne ambos grupos en el mismo archivo y excluye las demás columnas. Ejecuta el comando de altas en el servidor. Las altas existentes conservan su identificador. Las coincidencias ambiguas bloquean el acceso por ese nombre hasta que se importe un listado conjunto corregido. Revisa manualmente que una ficha preexistente corresponda a la persona que conserva el nombre una vez resuelta la colisión.
 
-`node server/manage.js reset-student ID private/nuevo-codigo.json` renueva un código y revoca sus sesiones. `node server/manage.js delete-student ID` elimina la ficha, sus sesiones e intentos de la base operativa. Ambas operaciones se realizan en el servidor. El ID se obtiene del listado devuelto al panel de administración.
+`node server/manage.js delete-student ID` elimina la ficha, sus accesos, sesiones e intentos de la base operativa. El ID se obtiene del listado devuelto al panel de administración.
 
 ## Actualizar el temario
 
@@ -37,7 +37,7 @@ Antes de activar una pregunta, comprueba la respuesta, los distractores y la ref
 
 ## Seguridad y mantenimiento
 
-Las sesiones expiran a las 12 horas, se transmiten en cookies HttpOnly y tienen la marca Secure en producción. Las mutaciones verifican el origen, los códigos se verifican con scrypt y los intentos de acceso tienen un límite temporal. La corrección, las soluciones y el control de permisos residen en el servidor. Las consultas del alumnado se limitan a la sesión correspondiente. Las exportaciones docentes contienen resultados personales y deben guardarse en almacenamiento institucional autorizado.
+Las sesiones expiran a las 12 horas, se transmiten en cookies HttpOnly y tienen la marca Secure en producción. Las mutaciones verifican el origen. El código de administración docente se verifica con scrypt y los fallos docentes tienen un límite temporal en memoria. El acceso del alumnado valida el nombre completo contra el listado privado, sin verificación de identidad. La corrección, las soluciones y el control de permisos residen en el servidor. El historial se asocia al nombre reconocido en la sesión. Quien conozca un nombre matriculado puede consultar su historial y realizar pruebas atribuidas a ese nombre. Los resultados son orientativos y carecen de efectos en la evaluación oficial. El registro guarda las fechas de inicio de sesión y la actividad de las pruebas. La aplicación no almacena direcciones IP. Las exportaciones docentes contienen resultados personales y deben guardarse en almacenamiento institucional autorizado.
 
 Antes de incorporar alumnado real, acuerda con la Universidad la base jurídica, el aviso de privacidad, el proveedor de alojamiento, los plazos de conservación y el circuito de acceso, exportación y supresión. Limita el acceso al volumen, configura copias cifradas y prueba su restauración. Aplica el plan de supresión también a copias y exportaciones. Conserva el banco y los datos exclusivamente en almacenamiento privado.
 
