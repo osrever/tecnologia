@@ -47,3 +47,11 @@ export function validQuestion(q) {
     ['baja','media','alta'].includes(q.difficulty) && ['pendiente','validada'].includes(q.status) &&
     typeof q.active === 'boolean' && (!q.active || q.status === 'validada')
 }
+
+export function answerChanges(input) {
+  const answers = input.answers===undefined ? {[input.index]:input.choice} : input.answers
+  if (!answers || typeof answers!=='object' || Array.isArray(answers)) return null
+  const entries = Object.entries(answers)
+  if (!entries.length || entries.some(([index,choice])=>!/^([0-9]|1[0-9])$/.test(index)||![null,0,1,2,3].includes(choice))) return null
+  return answers
+}

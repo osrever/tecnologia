@@ -8,7 +8,7 @@ await build({root,build:{outDir:resolve(root,'dist/apps-script-web'),emptyOutDir
 const web=resolve(root,'dist/apps-script-web/assets')
 const js=readFileSync(resolve(web,readdirSync(web).find(name=>name.endsWith('.js'))),'utf8')
 const css=readFileSync(resolve(web,readdirSync(web).find(name=>name.endsWith('.css'))),'utf8')
-const protect = source => source.replace(/(?<![.\w])(normalize|shuffle|selectQuestions|grade|validQuestion|randomInt)\(/g,
+const protect = source => source.replace(/(?<![.\w])(normalize|shuffle|selectQuestions|grade|validQuestion|answerChanges|randomInt)\(/g,
   (_,name)=>name+'_(').replace('.every(validQuestion)', '.every(validQuestion_)').replace('.map(normalize)', '.map(normalize_)')
 const exam=readFileSync(resolve(root,'server/exam.js'),'utf8')
   .replace("import {randomInt} from 'node:crypto'",'const randomInt_ = max => Math.floor(Math.random()*max)')
@@ -34,22 +34,17 @@ function prepararPrueba() {
 }
 
 function prepararPrueba_() {
-  const properties = props_()
-  if (!properties.getProperty('BANK_FILE_ID')) {
-    const files = DriveApp.getFilesByName('banco-privado-autoevaluacion-tic.json')
-    const fingerprint = '80ee8e471d1ab976031c1935855736d08fbbe0250977f4b389073bfb8ac046e7'
-    while (files.hasNext()) {
-      const file = files.next()
-      if (hash_(file.getBlob().getDataAsString('UTF-8')) === fingerprint) {
-        properties.setProperty('BANK_FILE_ID', file.getId())
-        break
-      }
-    }
+  const files = DriveApp.getFilesByName('banco-literal-autoevaluacion-tic.json')
+  const fingerprint = '625befb7b8863cce5334c2a78f31aaba6bcc32257cfa1f1c0ffedc1cd5ed1331'
+  while (files.hasNext()) {
+    const text = files.next().getBlob().getDataAsString('UTF-8')
+    if (hash_(text) !== fingerprint) continue
+    setupPrivate_()
+    activateLiteralBank_(JSON.parse(text))
+    console.log('Banco literal activo. Prueba privada preparada. Usuario: Paco Olivares.')
+    return
   }
-  if (!properties.getProperty('BANK_FILE_ID')) throw Error('No se encuentra el banco de preguntas verificado en esta cuenta.')
-  setupPrivate_()
-  importBank_()
-  console.log('Prueba privada preparada. Usuario: Paco Olivares.')
+  throw Error('No se encuentra el nuevo banco literal verificado en esta cuenta.')
 }
 `
 const single = resolve(root,'dist/apps-script-un-archivo')

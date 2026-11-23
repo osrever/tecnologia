@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useRef, useState} from 'react'
 import {createRoot} from 'react-dom/client'
 import './style.css'
 
@@ -42,12 +42,59 @@ function App() {
   const [review,setReview]=useState(null)
   const [history,setHistory]=useState(null)
   const [confirmFinish,setConfirmFinish]=useState(false)
+  const [saveFailed,setSaveFailed]=useState(false)
+  const queued=useRef({})
+  const saving=useRef(null)
+  const timer=useRef(null)
+
+  function storeDraft(id) {
+    try {
+      if (Object.keys(queued.current).length) sessionStorage.setItem('tic-draft:'+id,JSON.stringify(queued.current))
+      else sessionStorage.removeItem('tic-draft:'+id)
+    } catch {}
+  }
+
+  function flushAnswers(id) {
+    clearTimeout(timer.current)
+    if (saving.current) return saving.current
+    saving.current=(async()=>{
+      while (Object.keys(queued.current).length) {
+        const batch={...queued.current}
+        await api('/exam/'+id+'/answer',{answers:batch})
+        for (const [key,choice] of Object.entries(batch)) {
+          if (queued.current[key]===choice) delete queued.current[key]
+        }
+        storeDraft(id)
+      }
+      setSaveFailed(false)
+    })().finally(()=>{saving.current=null})
+    return saving.current
+  }
+
+  function saveInBackground(id) {
+    clearTimeout(timer.current)
+    timer.current=setTimeout(()=>flushAnswers(id).catch(()=>setSaveFailed(true)),550)
+  }
+
+  function chooseAnswer(choice) {
+    queued.current[index]=choice
+    setExam(current=>({...current,answers:{...current.answers,[index]:choice}}))
+    storeDraft(exam.id)
+    saveInBackground(exam.id)
+  }
+
 
   async function restore() {
     const user=await api('/me')
     setMe(user)
     if (user.role==='teacher') return setPage('teacher')
     const active=await api('/exam')
+    if (active) {
+      try {queued.current=JSON.parse(sessionStorage.getItem('tic-draft:'+active.id))??{}}
+      catch {queued.current={}}
+      if (Object.keys(queued.current).length) saveInBackground(active.id)
+      active.answers={...active.answers,...queued.current}
+    }
     setExam(active)
     setIndex(0)
     setPage(active?'exam':'topics')
@@ -76,6 +123,7 @@ function App() {
   const reviewPage=id=>action(async()=>{setReview(await api('/exam/'+id+'/review'));setPage('review')})
   const logout=()=>action(async()=>{
     if (page==='exam' && !window.confirm('¿Cerrar sesión? Podrás continuar el examen cuando vuelvas a acceder.')) return
+    if (page==='exam') await flushAnswers(exam.id)
     await api('/logout',{})
     setMe(null);setExam(null);setResult(null);setReview(null);setHistory(null);setTopics([]);setConfirmed(false);setPage('login')
   })
@@ -136,17 +184,15 @@ function App() {
       {page==='exam' && q && <>
         <div className="heading"><div>{title('Pregunta '+(index+1)+' de 20')}<p>{answered} de 20 respondidas</p></div>
           <button disabled={busy} onClick={()=>setConfirmFinish(true)}>Finalizar examen</button></div>
+        {saveFailed && <p role="status" className="notice">Quedan respuestas por guardar. <button type="button" onClick={()=>flushAnswers(exam.id).catch(()=>setSaveFailed(true))}>Reintentar guardado</button></p>}
         <progress aria-label="Preguntas respondidas" value={answered} max="20"/>
         <div className="exam-layout">
           <section className="card">
+            <p className="eyebrow">{q.topic ? 'Tema '+q.topic+' · '+topicName(q.topic) : exam.topics.map(topicName).join(' · ')}</p>
             <fieldset key={index} disabled={busy}><legend className="prompt">{q.prompt}</legend>
             {q.options.map((option,i)=><label className={'answer '+(exam.answers[index]===i?'selected':'')} key={i}>
-              <input type="radio" name="answer" checked={exam.answers[index]===i} onChange={()=>action(async()=>{
-                await api('/exam/'+exam.id+'/answer',{index,choice:i});setExam({...exam,answers:{...exam.answers,[index]:i}})
-              })}/><strong>{letter(i)}.</strong> {option}</label>)}</fieldset>
-            <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>action(async()=>{
-              await api('/exam/'+exam.id+'/answer',{index,choice:null});setExam({...exam,answers:{...exam.answers,[index]:null}})
-            })}>Dejar en blanco</button>
+              <input type="radio" name="answer" checked={exam.answers[index]===i} onChange={()=>chooseAnswer(i)}/><strong>{letter(i)}.</strong> {option}</label>)}</fieldset>
+            <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>chooseAnswer(null)}>Dejar en blanco</button>
             <div className="actions footer"><button disabled={busy||index===0} onClick={()=>setIndex(index-1)}>Anterior</button>
               <button disabled={busy||index===19} onClick={()=>setIndex(index+1)}>Siguiente</button></div>
           </section>
@@ -162,6 +208,7 @@ function App() {
           <p>{answered} respondidas · {20-answered} pendientes</p>
           <div className="actions"><button onClick={()=>setConfirmFinish(false)} disabled={busy}>Volver al examen</button>
             <button className="primary" disabled={busy} onClick={()=>action(async()=>{
+              await flushAnswers(exam.id)
               setResult(await api('/exam/'+exam.id+'/finish',{}));setExam(null);setConfirmFinish(false);setPage('result')
             })}>Confirmar y corregir</button></div>
         </section>}
@@ -178,7 +225,7 @@ function App() {
       {page==='review' && review && <>
         <div className="heading">{title('Revisión del examen')}<button onClick={historyPage} disabled={busy}>Ver mi progreso</button></div>
         {review.items.map((item,i)=><article className="card review" key={i}>
-          <p className="eyebrow">{topicName(item.topic)} · {review.answers[i]==null?'En blanco':review.answers[i]===item.correct?'Correcta':'Incorrecta'}</p>
+          <p className="eyebrow">{'Tema '+item.topic+' · '+topicName(item.topic)} · {review.answers[i]==null?'En blanco':review.answers[i]===item.correct?'Correcta':'Incorrecta'}</p>
           <h2>{i+1}. {item.prompt}</h2>
           <ul>{item.options.map((option,j)=><li key={j} className={j===item.correct?'correct':''}>
             {letter(j)}. {option} {j===item.correct && <strong>· Respuesta correcta</strong>} {j===review.answers[i] && <strong>· Tu respuesta</strong>}

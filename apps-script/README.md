@@ -24,3 +24,11 @@ El paquete está en `dist/apps-script` y contiene `Index.html`, `Code.gs`, `Exam
 ## Continuidad de los datos
 
 El identificador `DATABASE_ID` apunta al mismo libro entre versiones y redespliegues. Conserva una copia en Drive privado y comprueba su restauración con un despliegue privado antes de sustituir el libro activo. La cuenta de Paco queda fuera del listado docente, las estadísticas y el CSV. Los permisos del proyecto Apps Script y del libro se gestionan por separado.
+
+## Actualización del banco literal en la instalación de un archivo
+
+El flujo `Paquete de Google Apps Script` genera también `instalacion-en-un-archivo`. En el proyecto existente, sustituye el contenido de `Código.gs` por el del archivo de instalación y ejecuta `prepararPrueba` como propietario. Esta función localiza en Drive el banco literal por nombre y huella SHA-256, incorpora sus preguntas y desactiva las de la versión anterior para nuevos exámenes. Las pruebas en curso y las terminadas conservan sus preguntas y respuestas.
+
+En **Gestionar implementaciones**, edita la implementación existente y selecciona **Nueva versión** para conservar su URL y sus permisos. Las selecciones se reflejan de inmediato y las respuestas se envían a Google Sheets en lotes. La aplicación confirma el guardado antes de corregir el examen.
+
+Para validar y regenerar el banco, conserva de forma privada los archivos originales `1.txt` a `9.txt` y las selecciones `literal-1.txt` a `literal-9.txt`. Cada fila de selección contiene seis campos separados por `|`: apartado, cita completa, fragmento omitido y tres distractores. Ejecuta `node apps-script/build-literal-bank.mjs DIRECTORIO_FUENTES BANCO_ANTERIOR SALIDA_PRIVADA`. El generador verifica que cada cita y cada respuesta coincidan con su fuente. Después de guardar el banco en Drive privado, actualiza la huella que usa `prepararPrueba` antes de crear un paquete de instalación.

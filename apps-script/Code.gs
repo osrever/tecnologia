@@ -63,6 +63,12 @@ function store_() {
       const values=records.map(record=>[JSON.stringify(record)])
       sheet.getRange(sheet.getLastRow()+1,1,values.length,1).setValues(values)
     },
+    replace(name,records) {
+      const sheet=database.getSheetByName(name)
+      const values=records.map(record=>[JSON.stringify(record)])
+      while (values.length<sheet.getLastRow()) values.push([''])
+      sheet.getRange(1,1,values.length,1).setValues(values)
+    },
     remove(name,row) {
       database.getSheetByName(name).getRange(row,1).clearContent()
     }
@@ -93,6 +99,30 @@ function importBank_() {
     const questions=new Set(store.all('Questions').map(question=>question.id))
     store.append('Questions',data.questions.filter(question=>!questions.has(question.id))
       .map(question=>({...question,version:1})))
+  })
+}
+
+function activateLiteralBank_(data) {
+  if (data.topics?.length!==9 || new Set(data.topics.map(t=>t.id)).size!==9 ||
+      !Array.isArray(data.questions) || !data.questions.every(q=>validQuestion(q)&&q.id.startsWith('TL')) ||
+      new Set(data.questions.map(q=>q.id)).size!==data.questions.length ||
+      Array.from({length:9},(_,i)=>i+1).some(id=>!data.topics.some(t=>t.id===id) ||
+        data.questions.filter(q=>q.topic===id&&q.active).length<20)) throw Error('Banco literal incompleto o inválido.')
+  lock_(()=>{
+    const store=store_()
+    const topics=new Map(store.all('Topics').map(topic=>[topic.id,topic]))
+    for (const {id,title} of data.topics) store.save('Topics',{id,title},topics.get(id)?.row)
+    const incoming=new Map(data.questions.map(question=>[question.id,question]))
+    const records=store.all('Questions').map(({row,version,...q})=>{
+      const replacement=incoming.get(q.id)
+      if (replacement) {
+        incoming.delete(q.id)
+        return {...replacement,version:version+Number(JSON.stringify(q)!==JSON.stringify(replacement))}
+      }
+      return {...q,active:false,version:version+Number(q.active)}
+    })
+    for (const question of incoming.values()) records.push({...question,version:1})
+    store.replace('Questions',records)
   })
 }
 
@@ -148,7 +178,7 @@ function summary_(exam) {
 }
 
 function examView_(exam) {
-  return {id:exam.id,topics:exam.topics,answers:exam.answers,items:exam.items.map(({prompt,options})=>({prompt,options}))}
+  return {id:exam.id,topics:exam.topics,answers:exam.answers,items:exam.items.map(({topic,prompt,options})=>({topic,prompt,options}))}
 }
 
 function request(path,input,token) {
@@ -240,9 +270,9 @@ function route_(store,path,input,token) {
     const action=match[2]
     if (action==='review'&&!input&&exam.finished) return {...summary_(exam),answers:exam.answers,items:exam.items}
     if (action==='answer'&&input&&!exam.finished) {
-      const {index,choice}=input
-      if (!Number.isInteger(index)||index<0||index>=20||![null,0,1,2,3].includes(choice)) fail_('Respuesta incorrecta.')
-      exam.answers[index]=choice
+      const answers=answerChanges(input)
+      if (!answers) fail_('Respuesta incorrecta.')
+      exam.answers={...exam.answers,...answers}
       store.save('Attempts',exam,exam.row)
       return {}
     }

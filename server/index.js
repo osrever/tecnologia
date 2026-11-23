@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises'
 import {resolve, extname} from 'node:path'
 import {pathToFileURL} from 'node:url'
 import {openDatabase, TEST_STUDENT_ID} from './db.js'
-import {normalize, selectQuestions, grade, validQuestion} from './exam.js'
+import {normalize, selectQuestions, grade, validQuestion, answerChanges} from './exam.js'
 import {token, digest, matches} from './auth.js'
 
 const decode = JSON.parse
@@ -32,7 +32,7 @@ async function body(req) {
 const summary = row => ({id:row.id, topics:decode(row.topics), finished:row.finished,
   duration:Math.round((row.finished-row.started)/1000), ...decode(row.result)})
 const examView = row => ({id:row.id, topics:decode(row.topics), answers:decode(row.answers),
-  items:decode(row.items).map(({prompt,options})=>({prompt,options}))})
+  items:decode(row.items).map(({topic,prompt,options})=>({topic,prompt,options}))})
 const reviewView = row => ({...summary(row), answers:decode(row.answers), items:decode(row.items)})
 const csvCell = value => {
   const str = String(value ?? '')
@@ -296,10 +296,10 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
         if (!row) throw invalid(404,'Examen no encontrado.')
         if (action==='review' && method==='GET' && row.finished) return send(reviewView(row))
         if (action==='answer' && method==='POST' && !row.finished) {
-          const {index,choice} = input
-          if (!Number.isInteger(index) || index<0 || index>=20 || ![null,0,1,2,3].includes(choice)) throw invalid(400,'Respuesta incorrecta.')
-          const changed = run("UPDATE attempts SET answers=json_set(answers,?,json(?)) WHERE id=? AND finished IS NULL",
-            '$."'+index+'"',encode(choice),id)
+          const answers = answerChanges(input)
+          if (!answers) throw invalid(400,'Respuesta incorrecta.')
+          const changed = run('UPDATE attempts SET answers=? WHERE id=? AND finished IS NULL',
+            encode({...decode(row.answers),...answers}),id)
           if (!changed.changes) throw invalid(409,'El examen ya está corregido.')
           return send({})
         }

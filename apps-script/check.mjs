@@ -25,8 +25,10 @@ const ctx=createContext({
       const data=database.get(name)
       return {
         getDataRange:()=>({getValues:()=>data.map(text=>[text])}),
+        getLastRow:()=>data.length,
         getRange:row=>({
           setValue:value=>{data[row-1]=value},
+          setValues:rows=>rows.forEach(([text],index)=>{data[row+index-1]=text}),
           clearContent:()=>{data[row-1]=''}
         }),
         appendRow:([text])=>data.push(text),
@@ -65,10 +67,12 @@ assert.ok(exam.items.every(q=>!('correct' in q)))
 assert.ok(call('/exam/'+exam.id+'/review',null,paco).error)
 const other=call('/login',{name:'Nombre de prueba'}).token
 assert.ok(call('/exam/'+exam.id+'/finish',{},other).error)
-for (const [index,item] of exam.items.entries()) {
+assert.ok(exam.items.every(q=>q.topic===1))
+const answers=Object.fromEntries(exam.items.map((item,index)=>{
   const original=questions.find(q=>q.prompt===item.prompt)
-  assert.ok(call('/exam/'+exam.id+'/answer',{index,choice:item.options.indexOf(original.options[original.correct])},paco).value)
-}
+  return [index,item.options.indexOf(original.options[original.correct])]
+}))
+assert.ok(call('/exam/'+exam.id+'/answer',{answers},paco).value)
 assert.equal(call('/exam/'+exam.id+'/finish',{},paco).value.grade,10)
 assert.equal(call('/exam/'+exam.id+'/review',null,paco).value.items.length,20)
 assert.equal(call('/history',null,paco).value.results.length,1)
@@ -79,6 +83,17 @@ assert.match(call('/teacher/results?format=csv',null,teacher).value,/Nombre/)
 const bank=call('/teacher/bank',null,teacher)
 assert.equal(bank.value.length,questions.length)
 assert.ok(call('/teacher/bank',bank.value[0],teacher).value.id)
+if (process.argv[2] && questions.every(q=>q.id.startsWith('TL'))) {
+  const literal=JSON.parse(readFileSync(process.argv[2],'utf8'))
+  write('Questions',[{...questions[0],id:'old-question',version:1}])
+  ctx.activateLiteralBank_(literal)
+  ctx.activateLiteralBank_(literal)
+  const updated=call('/teacher/bank',null,teacher).value
+  assert.equal(updated.filter(q=>q.active).length,literal.questions.length)
+  assert.equal(updated.find(q=>q.id==='old-question').active,false)
+  assert.equal(updated.length,literal.questions.length+1)
+  assert.equal(call('/exam/'+exam.id+'/review',null,paco).value.items.length,20)
+}
 assert.ok(call('/logout',{},paco).value)
 assert.ok(call('/me',null,paco).error)
 console.log('Apps Script: acceso, examen, revisión, historial, administración y exportación verificados localmente.')
