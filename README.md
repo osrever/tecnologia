@@ -29,6 +29,10 @@ Prepara un JSON privado con una lista de objetos que contienen `first`, `last` y
 
 `node server/manage.js delete-student ID` elimina la ficha, sus accesos, sesiones e intentos de la base operativa. El ID se obtiene del listado devuelto al panel de administración.
 
+## Cuenta de pruebas
+
+El servidor incluye a **Paco Olivares** como estudiante de prueba del grupo 3. Puede realizar y revisar exámenes y consultar su propio historial. Su actividad queda fuera del listado docente, las estadísticas y el CSV.
+
 ## Actualizar el temario
 
 Importa un JSON privado con `topics` (nueve objetos `id` y `title`) y `questions`. Cada pregunta admite `id`, `topic`, `concept`, `prompt`, `options` (cuatro alternativas), `correct` (índice de 0 a 3), `explanation`, `reference`, `difficulty` (baja, media o alta), `status` (pendiente o validada) y `active` (booleano). El panel docente permite editar, activar, desactivar, eliminar y exportar el banco. Mantén los identificadores al corregir o actualizar preguntas existentes. La importación incrementa la versión al detectar cambios y cada intento guarda la versión que se presentó, con sus opciones barajadas.

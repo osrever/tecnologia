@@ -3,6 +3,8 @@ import {mkdirSync} from 'node:fs'
 import {dirname} from 'node:path'
 import topicTitles from './topic-titles.json' with {type:'json'}
 
+export const TEST_STUDENT_ID = 'test-paco-olivares'
+
 export function openDatabase(path = process.env.DB_PATH || 'private/app.sqlite') {
   if (path !== ':memory:') mkdirSync(dirname(path), {recursive:true,mode:0o700})
   const db = new DatabaseSync(path)
@@ -39,5 +41,7 @@ export function openDatabase(path = process.env.DB_PATH || 'private/app.sqlite')
   }
   const topic = db.prepare('INSERT INTO topics VALUES (?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title WHERE title=?')
   topicTitles.forEach((title,index)=>topic.run(index+1,title,`Tema ${index+1}`))
+  db.prepare('INSERT OR IGNORE INTO students (id,first,last,name_key,group_no) VALUES (?,?,?,?,?)')
+    .run(TEST_STUDENT_ID,'Paco','Olivares',JSON.stringify(['paco','olivares']),3)
   return db
 }

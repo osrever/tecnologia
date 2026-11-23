@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
 import {resolve, extname} from 'node:path'
 import {pathToFileURL} from 'node:url'
-import {openDatabase} from './db.js'
+import {openDatabase, TEST_STUDENT_ID} from './db.js'
 import {normalize, selectQuestions, grade, validQuestion} from './exam.js'
 import {token, digest, matches} from './auth.js'
 
@@ -45,7 +45,7 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
   const all = (sql,...args) => db.prepare(sql).all(...args)
   const cookie = (value,age) => `tic=${value}; HttpOnly; SameSite=Lax; Path=/api; Max-Age=${age}${secure?'; Secure':''}`
   const questionBank = () => all('SELECT * FROM questions').map(row=>({...decode(row.data),id:row.id,version:row.version}))
-  const roster = () => all('SELECT id,first,last,group_no FROM students ORDER BY last,first')
+  const roster = () => all('SELECT id,first,last,group_no FROM students WHERE id<>? ORDER BY last,first',TEST_STUDENT_ID)
   let teacherFailures = 0
   let teacherWindow = 0
   const flattened = key => decode(key).join(' ')
@@ -172,7 +172,7 @@ export function app({db=openDatabase(), teacherHash=process.env.TEACHER_HASH, or
           const person = url.searchParams.get('student')
           const students = roster()
           const byId = new Map(students.map(s=>[s.id,s]))
-          const includesStudent = id => (!person || id===person) && (!group || String(byId.get(id).group_no)===group)
+          const includesStudent = id => byId.has(id) && (!person || id===person) && (!group || String(byId.get(id).group_no)===group)
           const attempts = all('SELECT student,started,topics FROM attempts WHERE started>=? AND started<?',start,end)
             .filter(row=>includesStudent(row.student) && (!topic || decode(row.topics).includes(topic)))
           const rows = all('SELECT * FROM attempts WHERE finished>=? AND finished<? ORDER BY finished DESC',start,end)

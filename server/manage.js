@@ -1,6 +1,6 @@
 import {readFileSync, writeFileSync} from 'node:fs'
 import {randomUUID} from 'node:crypto'
-import {openDatabase} from './db.js'
+import {openDatabase, TEST_STUDENT_ID} from './db.js'
 import {normalize, validQuestion} from './exam.js'
 import {token, hashCode} from './auth.js'
 
@@ -28,7 +28,7 @@ if (command==='teacher') {
     let created = 0
     const rejected = []
     transaction(()=>{
-      const existing = db.prepare('SELECT 1 FROM students WHERE name_key=?')
+      const existing = db.prepare('SELECT 1 FROM students WHERE name_key=? AND id<>?')
       const add = db.prepare('INSERT INTO students VALUES (?,?,?,?,?)')
       const suspend = db.prepare('INSERT OR IGNORE INTO ambiguous_names VALUES (?)')
       const revoke = db.prepare('DELETE FROM sessions WHERE student IN (SELECT id FROM students WHERE name_key=?)')
@@ -42,7 +42,7 @@ if (command==='teacher') {
           continue
         }
         unblock.run(name)
-        if (existing.get(name)) continue
+        if (existing.get(name,TEST_STUDENT_ID)) continue
         add.run(randomUUID(),s.first.trim(),s.last.trim(),name,s.group)
         created++
       }
