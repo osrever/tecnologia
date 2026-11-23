@@ -211,7 +211,7 @@ function route_(store,path,input,token) {
     const complete=attempts.filter(exam=>exam.finished).sort((a,b)=>b.finished-a.finished)
     const stats={}
     for (const exam of complete) exam.items.forEach((q,index)=>{
-      const topic=stats[q.topic]??={total:0,right:0}
+      const topic=stats[q.topic] || (stats[q.topic]={total:0,right:0})
       topic.total++
       if (exam.answers[index]===q.correct) topic.right++
     })
