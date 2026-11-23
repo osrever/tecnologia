@@ -135,7 +135,7 @@ function App() {
     setTopics(values=>values.includes(id)?values.filter(item=>item!==id):[...values,id])
   }
   const topicName=id=>me?.topics.find(t=>t.id===id)?.title ?? 'Tema '+id
-  const title=text=><h1 id="main-title" tabIndex="-1">{text}</h1>
+  const title=(text,className)=><h1 id="main-title" className={className} tabIndex="-1">{text}</h1>
   const answered=exam ? Object.values(exam.answers).filter(value=>value!=null).length : 0
   const q=exam?.items[index]
   const stats=history?.results??[]
@@ -151,7 +151,7 @@ function App() {
       {error && <p role="alert" className="alert">{error}</p>}
       {page==='loading' && <p role="status">Cargando…</p>}
       {page==='landing' && <section className="card access">
-        {title('Práctica para el examen')}
+        {title('Práctica para el examen','practice-title')}
         <p>Tecnologías para la Información y la Comunicación Escrita · 2710009</p>
         <p>Curso 2026–2027 · Grupos 3 y 4</p>
         {expectedOrigin ? <a className="primary button" href={expectedOrigin}>Acceder a la aplicación</a> :
@@ -159,7 +159,7 @@ function App() {
       </section>}
       {page==='login' && <section className="card access">
         <div className="eyebrow">Curso 2026–2027 · Grupos 3 y 4</div>
-        {title(teacher?'Acceso del profesorado':'Práctica para el examen')}
+        {title(teacher?'Acceso del profesorado':'Práctica para el examen',teacher?undefined:'practice-title')}
         <p className="muted">Tecnologías para la Información y la Comunicación Escrita · 2710009</p>
         <form onSubmit={e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget));action(async()=>{
           await api(teacher?'/teacher/login':'/login',data)

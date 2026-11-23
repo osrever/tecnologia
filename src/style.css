@@ -12,7 +12,8 @@ body{margin:0}
 main{padding-block:2.4rem;min-height:70vh}
 .bottom{padding-block:1rem 1.7rem;border-top:1px solid var(--line);color:var(--muted);font-size:.9rem}
 .card{background:white;border:1px solid var(--line);border-radius:1rem;padding:clamp(1rem,3vw,2rem);box-shadow:0 8px 24px #182c4810}
-.access{max-width:34rem;margin:clamp(.3rem,6vh,4rem) auto;padding:clamp(1.15rem,5vw,2.8rem)}
+.access{max-width:34rem;margin:clamp(.3rem,6vh,4rem) auto;padding:clamp(1.15rem,5vw,2.8rem);container-type:inline-size}
+.practice-title{font-size:min(2.55rem,8.2cqi);white-space:nowrap}
 h1,h2,p{margin:0 0 .7rem}
 h1{font-size:clamp(1.9rem,5vw,2.9rem);line-height:1.12;letter-spacing:-.035em}
 h2{font-size:1.2rem;line-height:1.35}
