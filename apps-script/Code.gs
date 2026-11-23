@@ -57,6 +57,12 @@ function store_() {
       if (row) sheet.getRange(row,1).setValue(text)
       else sheet.appendRow([text])
     },
+    append(name,records) {
+      if (!records.length) return
+      const sheet=database.getSheetByName(name)
+      const values=records.map(record=>[JSON.stringify(record)])
+      sheet.getRange(sheet.getLastRow()+1,1,values.length,1).setValues(values)
+    },
     remove(name,row) {
       database.getSheetByName(name).getRange(row,1).clearContent()
     }
@@ -82,14 +88,11 @@ function importBank_() {
   if (!Array.isArray(data.topics)||!Array.isArray(data.questions)||!data.questions.every(validQuestion)) throw Error('Banco inválido.')
   lock_(()=>{
     const store=store_()
-    for (const [table,records] of [['Topics',data.topics],['Questions',data.questions]]) {
-      const existing=new Map(store.all(table).map(record=>[record.id,record]))
-      for (const record of records) {
-        const old=existing.get(record.id)
-        if (table==='Topics') store.save(table,{id:record.id,title:record.title},old?.row)
-        else if (!old) store.save(table,{...record,version:1})
-      }
-    }
+    const topics=new Map(store.all('Topics').map(topic=>[topic.id,topic]))
+    for (const {id,title} of data.topics) store.save('Topics',{id,title},topics.get(id)?.row)
+    const questions=new Set(store.all('Questions').map(question=>question.id))
+    store.append('Questions',data.questions.filter(question=>!questions.has(question.id))
+      .map(question=>({...question,version:1})))
   })
 }
 
