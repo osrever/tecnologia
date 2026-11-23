@@ -69,3 +69,8 @@ th,td{padding:.7rem;border-bottom:1px solid var(--line)}
 .editor{border-top:1px solid var(--line);padding-top:1rem}
 .check{display:flex;align-items:center;gap:.5rem}
 @media(max-width:43rem){.exam-layout{grid-template-columns:1fr}.session{width:100%;margin:0}.history-row{grid-template-columns:1fr auto}.history-row meter{grid-column:1 / -1}.course{column-gap:.5rem}}
+
+@media(max-width:43rem){
+  .exam-controls{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:.35rem}
+  .exam-controls button{min-width:0;padding-inline:.25rem;font-size:.875rem}
+}

@@ -195,13 +195,11 @@ function App() {
             {q.options.map((option,i)=><label className="answer" key={i}>
               <input type="radio" name="answer" checked={exam.answers[index]===i} onChange={()=>chooseAnswer(i)}/><strong>{letter(i)}.</strong> {option}</label>)}</fieldset>
             <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>chooseAnswer(null)}>Dejar en blanco</button>
-            <div className="actions footer">
+            <div className="actions footer exam-controls">
               <button disabled={busy||index===0} onClick={()=>setIndex(index-1)}>Anterior</button>
-              <div className="actions">
-                {index<exam.items.length-1 && <button disabled={busy} onClick={()=>setIndex(index+1)}>Siguiente</button>}
-                <button className={index===exam.items.length-1?'primary':''} disabled={busy}
-                  onClick={()=>setConfirmFinish(true)}>Finalizar examen</button>
-              </div>
+              {index<exam.items.length-1 && <button disabled={busy} onClick={()=>setIndex(index+1)}>Siguiente</button>}
+              <button className={index===exam.items.length-1?'primary':''} disabled={busy}
+                aria-label="Finalizar examen" onClick={()=>setConfirmFinish(true)}>Finalizar</button>
             </div>
             {confirmFinish && <section className="confirmation" aria-labelledby="confirm-title">
               <h2 id="confirm-title" tabIndex="-1">¿Finalizar examen?</h2>
