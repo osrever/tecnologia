@@ -20,7 +20,13 @@ const ctx=createContext({
   })},
   SpreadsheetApp:{
     flush(){},
-    openById:()=>({getSheetByName:name=>{
+    openById:id=>({getSheetByName:name=>{
+      if (name==='Lista de clase') return {
+        getLastRow:()=>9,
+        getRange:()=>({getDisplayValues:()=>id==='sheet-3'
+          ? [['Pruebas, Ana'],['Igual, Nombre'],['']]
+          : [['De prueba, Nombre'],['Igual, Nombre'],['']]})
+      }
       if (!database.has(name)) database.set(name,[])
       const data=database.get(name)
       return {
@@ -93,6 +99,17 @@ if (process.argv[2] && questions.every(q=>q.id.startsWith('TL'))) {
   assert.equal(updated.find(q=>q.id==='old-question').active,false)
   assert.equal(updated.length,literal.questions.length+1)
   assert.equal(call('/exam/'+exam.id+'/review',null,paco).value.items.length,20)
+}
+
+identity.set('GROUP_3_SHEET_ID','sheet-3')
+identity.set('GROUP_4_SHEET_ID','sheet-4')
+for (let attempt=0;attempt<2;attempt++) {
+  const enrolled=ctx.importStudents_()
+  assert.equal(enrolled[3],1)
+  assert.equal(enrolled[4],1)
+  assert.ok(call('/login',{name:'Ana Pruebas'}).token)
+  assert.ok(call('/login',{name:'Nombre Igual'}).error)
+  assert.equal(call('/me',null,other).value.role,'student')
 }
 assert.ok(call('/logout',{},paco).value)
 assert.ok(call('/me',null,paco).error)

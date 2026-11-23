@@ -40,7 +40,7 @@ legend{font-weight:750;margin-bottom:.65rem}
 .topics{margin-block:1.2rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr));gap:.7rem}
 .topics label,.answer{display:flex;align-items:center;gap:.7rem;min-height:3.15rem;padding:.65rem .75rem;border:1px solid var(--line);border-radius:.6rem;cursor:pointer}
 .topics small{display:block;color:var(--muted);font-size:.9rem}
-.selected{background:#e4effb;border-color:var(--blue)!important}
+.selected,.answer:has(input:checked){background:#e4effb;border-color:var(--blue)!important}
 .footer{border-top:1px solid var(--line);margin-top:1rem;padding-top:1rem;justify-content:space-between}
 progress,meter{width:100%;accent-color:var(--blue)}
 .exam-layout{display:grid;grid-template-columns:1fr minmax(15rem,19rem);gap:1rem;margin-top:1rem;align-items:start}

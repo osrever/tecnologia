@@ -25,12 +25,22 @@ const htmlParts = page.match(/[\s\S]{1,4096}/g).map(part=>JSON.stringify(part))
 const singleCode = readFileSync(resolve(out,'Code.gs'),'utf8')
   .replace("HtmlService.createHtmlOutputFromFile('Index')","HtmlService.createHtmlOutput(pageHtml_())")
 const singleSetup = `
-function prepararPrueba() {
+function requireOwner_() {
   const active = Session.getActiveUser().getEmail()
   if (!active || active !== Session.getEffectiveUser().getEmail()) {
     throw Error('Ejecuta esta función desde el editor con la cuenta propietaria.')
   }
+}
+
+function prepararPrueba() {
+  requireOwner_()
   prepararPrueba_()
+}
+
+function activarAlumnado() {
+  requireOwner_()
+  const counts = importStudents_()
+  console.log('Listados actualizados: grupo 3, ' + counts[3] + '; grupo 4, ' + counts[4] + '.')
 }
 
 function prepararPrueba_() {

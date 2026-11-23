@@ -133,16 +133,19 @@ function importStudents_() {
     const id=props.getProperty('GROUP_'+group+'_SHEET_ID')
     if (!id) throw Error('Configura los identificadores de los grupos.')
     const sheet=SpreadsheetApp.openById(id).getSheetByName('Lista de clase')
-    if (sheet.getLastRow()<7) continue
+    if (!sheet || sheet.getLastRow()<7) throw Error('No se encuentra el listado del grupo '+group+'.')
+    const before=people.length
     for (const [value] of sheet.getRange(7,1,sheet.getLastRow()-6,1).getDisplayValues()) {
       if (!/^[^,]+,[^,]+$/.test(value)) continue
       const [last,first]=value.split(',').map(part=>part.trim())
       if (first&&last) people.push({first,last,group_no:group})
     }
+    if (people.length===before) throw Error('El listado del grupo '+group+' no contiene nombres válidos.')
   }
-  lock_(()=>{
+  return lock_(()=>{
     const store=store_()
     const current=store.all('Students').filter(p=>p.id!==demoId)
+    const records=[demo]
     const keys=new Map()
     for (const p of people) {
       const key=nameKey_(p)
@@ -152,12 +155,15 @@ function importStudents_() {
     for (const p of current) {
       const matches=keys.get(nameKey_(p))
       const active=matches?.length===1
-      store.save('Students',{id:p.id,first:p.first,last:p.last,group_no:active?matches[0].group_no:p.group_no,active},p.row)
+      records.push({id:p.id,first:p.first,last:p.last,group_no:active?matches[0].group_no:p.group_no,active})
       if (active) keys.delete(nameKey_(p))
     }
     for (const matches of keys.values()) {
-      if (matches.length===1) store.save('Students',{id:token_(),...matches[0],active:true})
+      if (matches.length===1) records.push({id:token_(),...matches[0],active:true})
     }
+    store.replace('Students',records)
+    const enrolled=records.filter(person=>person.id!==demoId&&person.active)
+    return {3:enrolled.filter(person=>person.group_no===3).length,4:enrolled.filter(person=>person.group_no===4).length}
   })
 }
 

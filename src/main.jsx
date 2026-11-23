@@ -108,6 +108,9 @@ function App() {
     document.getElementById('main-title')?.focus()
   },[page,index])
   useEffect(()=>{
+    if (confirmFinish) document.getElementById('confirm-title')?.focus()
+  },[confirmFinish])
+  useEffect(()=>{
     if (page!=='exam') return
     const warn=e=>{e.preventDefault();e.returnValue=''}
     addEventListener('beforeunload',warn)
@@ -182,19 +185,33 @@ function App() {
         </section>
       </>}
       {page==='exam' && q && <>
-        <div className="heading"><div>{title('Pregunta '+(index+1)+' de 20')}<p>{answered} de 20 respondidas</p></div>
-          <button disabled={busy} onClick={()=>setConfirmFinish(true)}>Finalizar examen</button></div>
+        <div className="heading"><div>{title('Pregunta '+(index+1)+' de 20')}<p>{answered} de 20 respondidas</p></div></div>
         {saveFailed && <p role="status" className="notice">Quedan respuestas por guardar. <button type="button" onClick={()=>flushAnswers(exam.id).catch(()=>setSaveFailed(true))}>Reintentar guardado</button></p>}
         <progress aria-label="Preguntas respondidas" value={answered} max="20"/>
         <div className="exam-layout">
           <section className="card">
             <p className="eyebrow">{q.topic ? 'Tema '+q.topic+' · '+topicName(q.topic) : exam.topics.map(topicName).join(' · ')}</p>
             <fieldset key={index} disabled={busy}><legend className="prompt">{q.prompt}</legend>
-            {q.options.map((option,i)=><label className={'answer '+(exam.answers[index]===i?'selected':'')} key={i}>
+            {q.options.map((option,i)=><label className="answer" key={i}>
               <input type="radio" name="answer" checked={exam.answers[index]===i} onChange={()=>chooseAnswer(i)}/><strong>{letter(i)}.</strong> {option}</label>)}</fieldset>
             <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>chooseAnswer(null)}>Dejar en blanco</button>
-            <div className="actions footer"><button disabled={busy||index===0} onClick={()=>setIndex(index-1)}>Anterior</button>
-              <button disabled={busy||index===19} onClick={()=>setIndex(index+1)}>Siguiente</button></div>
+            <div className="actions footer">
+              <button disabled={busy||index===0} onClick={()=>setIndex(index-1)}>Anterior</button>
+              <div className="actions">
+                {index<exam.items.length-1 && <button disabled={busy} onClick={()=>setIndex(index+1)}>Siguiente</button>}
+                <button className={index===exam.items.length-1?'primary':''} disabled={busy}
+                  onClick={()=>setConfirmFinish(true)}>Finalizar examen</button>
+              </div>
+            </div>
+            {confirmFinish && <section className="confirmation" aria-labelledby="confirm-title">
+              <h2 id="confirm-title" tabIndex="-1">¿Finalizar examen?</h2>
+              <p>{answered} respondidas · {20-answered} pendientes</p>
+              <div className="actions"><button onClick={()=>setConfirmFinish(false)} disabled={busy}>Volver al examen</button>
+                <button className="primary" disabled={busy} onClick={()=>action(async()=>{
+                  await flushAnswers(exam.id)
+                  setResult(await api('/exam/'+exam.id+'/finish',{}));setExam(null);setConfirmFinish(false);setPage('result')
+                })}>{busy?'Guardando y corrigiendo…':'Confirmar y corregir'}</button></div>
+            </section>}
           </section>
           <nav className="card navigator" aria-label="Preguntas del examen">
             <h2>Navegación</h2><div className="numbers">{exam.items.map((_,i)=><button key={i} disabled={busy} aria-current={i===index?'step':undefined}
@@ -203,15 +220,7 @@ function App() {
             <p className="muted">En azul, respondidas.</p>
           </nav>
         </div>
-        {confirmFinish && <section className="card confirmation" aria-labelledby="confirm-title">
-          <h2 id="confirm-title">¿Finalizar examen?</h2>
-          <p>{answered} respondidas · {20-answered} pendientes</p>
-          <div className="actions"><button onClick={()=>setConfirmFinish(false)} disabled={busy}>Volver al examen</button>
-            <button className="primary" disabled={busy} onClick={()=>action(async()=>{
-              await flushAnswers(exam.id)
-              setResult(await api('/exam/'+exam.id+'/finish',{}));setExam(null);setConfirmFinish(false);setPage('result')
-            })}>Confirmar y corregir</button></div>
-        </section>}
+
       </>}
       {page==='result' && result && <section className="card">
         {title('Resultado del examen')}
