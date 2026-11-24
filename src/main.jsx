@@ -36,7 +36,6 @@ function App() {
   const [busy,setBusy]=useState(false)
   const [teacher,setTeacher]=useState(false)
   const [topics,setTopics]=useState([])
-  const [confirmed,setConfirmed]=useState(false)
   const [exam,setExam]=useState(null)
   const [index,setIndex]=useState(0)
   const [result,setResult]=useState(null)
@@ -129,10 +128,9 @@ function App() {
     if (page==='exam' && !window.confirm('¿Cerrar sesión? Podrás continuar el examen cuando vuelvas a acceder.')) return
     if (page==='exam') await flushAnswers(exam.id)
     await api('/logout',{})
-    setMe(null);setExam(null);setResult(null);setReview(null);setHistory(null);setTopics([]);setConfirmed(false);setPage('login')
+    setMe(null);setExam(null);setResult(null);setReview(null);setHistory(null);setTopics([]);setPage('login')
   })
   const toggle=id=>{
-    setConfirmed(false)
     setTopics(values=>values.includes(id)?values.filter(item=>item!==id):[...values,id])
   }
   const topicName=id=>me?.topics.find(t=>t.id===id)?.title ?? 'Tema '+id
@@ -148,7 +146,7 @@ function App() {
       {me && <div className="session">{me.student && <span>{me.student.first} {me.student.last} · {groupName(me.student.group_no)}</span>}<button className="ghost" disabled={busy} onClick={logout}>Cerrar sesión</button></div>}
       </div>
     </header>
-    <main id="contenido" className="shell">
+    <main id="contenido" className={'shell '+(page==='exam'?'exam-screen':page==='topics'||page==='topics-confirm'?'topics-screen':'')}>
       {error && <p role="alert" className="alert">{error}</p>}
       {page==='loading' && <p role="status">Cargando…</p>}
       {page==='landing' && <section className="card access">
@@ -174,34 +172,54 @@ function App() {
       </section>}
       {page==='topics' && <>
         <div className="heading"><div>{title('Elige los temas')}<p className="muted">20 preguntas · Sin límite de tiempo</p></div><button onClick={historyPage} disabled={busy}>Ver mi progreso</button></div>
-        <section className="card">
-          <div className="actions"><button onClick={()=>{setTopics(me.topics.map(t=>t.id));setConfirmed(false)}}>Seleccionar todos</button>
-            <button onClick={()=>{setTopics([]);setConfirmed(false)}}>Deseleccionar todos</button></div>
-          <fieldset className="topics"><legend>Temas disponibles</legend>{me.topics.map(t=><label className={topics.includes(t.id)?'selected':''} key={t.id}><input type="checkbox" checked={topics.includes(t.id)} onChange={()=>toggle(t.id)}/><span><small>Tema {t.id}</small>{t.title===('Tema '+t.id)?'Título pendiente':t.title}</span></label>)}</fieldset>
-          <div className="actions footer"><strong aria-live="polite">{topics.length} {topics.length===1?'tema seleccionado':'temas seleccionados'}</strong>
-            {confirmed ? <button className="primary" disabled={busy} onClick={()=>action(async()=>{
-              const current=await api('/exam',{topics});setExam(current);setIndex(0);setConfirmFinish(false);setPage('exam')
-            })}>Comenzar examen</button> : <button className="primary" disabled={!topics.length} onClick={()=>setConfirmed(true)}>Confirmar selección</button>}
+        <section className="card topic-card">
+          <div className="actions topic-options"><button onClick={()=>setTopics(me.topics.map(t=>t.id))}>Seleccionar todos</button>
+            <button onClick={()=>setTopics([])}>Deseleccionar todos</button></div>
+          <div className="topic-scroll">
+            <fieldset className="topics"><legend>Temas disponibles</legend>{me.topics.map(t=><label className={topics.includes(t.id)?'selected':''} key={t.id}><input type="checkbox" checked={topics.includes(t.id)} onChange={()=>toggle(t.id)}/><span><small>Tema {t.id}</small>{t.title===('Tema '+t.id)?'Título pendiente':t.title}</span></label>)}</fieldset>
+          </div>
+          <div className="actions footer topic-controls"><strong aria-live="polite">{topics.length} {topics.length===1?'tema seleccionado':'temas seleccionados'}</strong>
+            <button className="primary" disabled={!topics.length} onClick={()=>setPage('topics-confirm')}>Revisar selección</button>
           </div>
         </section>
       </>}
+      {page==='topics-confirm' && <section className="card topic-card">
+        {title('Temas para el examen')}
+        <p>Se generará una prueba de 20 preguntas con {topics.length===1?'este tema':'estos temas'}.</p>
+        <div className="topic-scroll">
+          <ul className="chosen-topics">{[...topics].sort((a,b)=>a-b).map(id=><li key={id}>Tema {id} · {topicName(id)}</li>)}</ul>
+        </div>
+        <div className="actions footer topic-controls">
+          <button disabled={busy} onClick={()=>setPage('topics')}>Cambiar temas</button>
+          <button className="primary" disabled={busy} onClick={()=>action(async()=>{
+            const current=await api('/exam',{topics});setExam(current);setIndex(0);setConfirmFinish(false);setPage('exam')
+          })}>{busy?'Preparando examen…':'Comenzar examen'}</button>
+        </div>
+      </section>}
       {page==='exam' && q && <>
         <div className="heading"><div>{title('Pregunta '+(index+1)+' de 20')}<p>{answered} de 20 respondidas</p></div></div>
         {saveFailed && <p role="status" className="notice">Quedan respuestas por guardar. <button type="button" onClick={()=>flushAnswers(exam.id).catch(()=>setSaveFailed(true))}>Reintentar guardado</button></p>}
         <progress aria-label="Preguntas respondidas" value={answered} max="20"/>
         <div className="exam-layout">
-          <section className="card">
+          <section className="card exam-card">
+            {!confirmFinish && <><div className="exam-question" key={index}>
             <p className="eyebrow">{q.topic ? 'Tema '+q.topic+' · '+topicName(q.topic) : exam.topics.map(topicName).join(' · ')}</p>
             <fieldset key={index} disabled={busy}><legend className="prompt">{q.prompt}</legend>
             {q.options.map((option,i)=><label className="answer" key={i}>
               <input type="radio" name="answer" checked={exam.answers[index]===i} onChange={()=>chooseAnswer(i)}/><strong>{letter(i)}.</strong> {option}</label>)}</fieldset>
-            <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>chooseAnswer(null)}>Dejar en blanco</button>
+            </div>
+            <div className="exam-tools">
+              <button className="text" disabled={busy || exam.answers[index]==null} onClick={()=>chooseAnswer(null)}>Dejar en blanco</button>
+              <label className="mobile-jump"><span>Ir a pregunta</span><select aria-label="Ir a pregunta" value={index}
+                onChange={e=>setIndex(Number(e.target.value))}>{exam.items.map((_,i)=><option key={i} value={i}>{i+1}{exam.answers[i]!=null?' · Respondida':''}</option>)}</select></label>
+            </div>
             <div className="actions footer exam-controls">
               <button disabled={busy||index===0} onClick={()=>setIndex(index-1)}>Anterior</button>
               {index<exam.items.length-1 && <button disabled={busy} onClick={()=>setIndex(index+1)}>Siguiente</button>}
               <button className={index===exam.items.length-1?'primary':''} disabled={busy}
                 aria-label="Finalizar examen" onClick={()=>setConfirmFinish(true)}>Finalizar</button>
             </div>
+            </>}
             {confirmFinish && <section className="confirmation" aria-labelledby="confirm-title">
               <h2 id="confirm-title" tabIndex="-1">¿Finalizar examen?</h2>
               <p>{answered} respondidas · {20-answered} pendientes</p>
@@ -215,7 +233,7 @@ function App() {
           <nav className="card navigator" aria-label="Preguntas del examen">
             <h2>Navegación</h2><div className="numbers">{exam.items.map((_,i)=><button key={i} disabled={busy} aria-current={i===index?'step':undefined}
               aria-label={'Pregunta '+(i+1)+', '+(exam.answers[i]!=null?'respondida':'pendiente')}
-              className={(exam.answers[i]!=null?'answered ':'')+(i===index?'current':'')} onClick={()=>setIndex(i)}>{i+1}</button>)}</div>
+              className={(exam.answers[i]!=null?'answered ':'')+(i===index?'current':'')} onClick={()=>{setConfirmFinish(false);setIndex(i)}}>{i+1}</button>)}</div>
             <p className="muted">En azul, respondidas.</p>
           </nav>
         </div>
@@ -227,7 +245,7 @@ function App() {
         <p>{result.topics.map(topicName).join(' · ')}</p>
         <div className={'result '+(result.passed?'passed':'failed')}><strong>{score(result.grade)}</strong><span>sobre 10 · {result.passed?'Aprobado':'Suspenso'}</span></div>
         <p>{result.right} aciertos · {result.wrong} fallos · {result.blank} en blanco · {Math.floor(result.duration/60)} min {result.duration%60} s</p>
-        <div className="actions"><button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Realizar otra prueba</button>
+        <div className="actions"><button className="primary" onClick={()=>{setPage('topics')}}>Realizar otra prueba</button>
           <button onClick={()=>reviewPage(result.id)} disabled={busy}>Revisar respuestas</button><button onClick={historyPage} disabled={busy}>Consultar el historial</button><button onClick={logout} disabled={busy}>Cerrar sesión</button></div>
       </section>}
       {page==='review' && review && <>
@@ -239,7 +257,7 @@ function App() {
             {letter(j)}. {option} {j===item.correct && <strong>· Respuesta correcta</strong>} {j===review.answers[i] && <strong>· Tu respuesta</strong>}
           </li>)}</ul><p>{item.explanation}</p><p className="muted">Referencia: {item.reference}</p>
         </article>)}
-        <button className="primary" onClick={()=>{setConfirmed(false);setPage('topics')}}>Realizar otra prueba</button>
+        <button className="primary" onClick={()=>{setPage('topics')}}>Realizar otra prueba</button>
       </>}
       {page==='history' && <>
         <div className="heading">{title('Mi progreso')}<button onClick={()=>setPage('topics')}>Elegir temas</button></div>
