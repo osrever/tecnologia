@@ -1,3 +1,4 @@
+const classGroups = [1,2,3,4,'DG']
 const demoId = 'test-paco-olivares'
 const demo = {id:demoId,first:'Paco',last:'Olivares',group_no:3}
 const sessionDuration = 12*60*60*1000
@@ -129,9 +130,14 @@ function activateLiteralBank_(data) {
 function importStudents_() {
   const props=props_()
   const people=[]
-  for (const group of [3,4]) {
+  const configuredGroups=new Set()
+  for (const group of classGroups) {
     const id=props.getProperty('GROUP_'+group+'_SHEET_ID')
-    if (!id) throw Error('Configura los identificadores de los grupos.')
+    if (!id) {
+      if (group===3||group===4) throw Error('Configura los identificadores de los grupos 3 y 4.')
+      continue
+    }
+    configuredGroups.add(group)
     const sheet=SpreadsheetApp.openById(id).getSheetByName('Lista de clase')
     if (!sheet || sheet.getLastRow()<7) throw Error('No se encuentra el listado del grupo '+group+'.')
     const before=people.length
@@ -153,6 +159,10 @@ function importStudents_() {
       keys.get(key).push(p)
     }
     for (const p of current) {
+      if (!configuredGroups.has(p.group_no)) {
+        records.push({id:p.id,first:p.first,last:p.last,group_no:p.group_no,active:p.active!==false})
+        continue
+      }
       const matches=keys.get(nameKey_(p))
       const active=matches?.length===1
       records.push({id:p.id,first:p.first,last:p.last,group_no:active?matches[0].group_no:p.group_no,active})
@@ -163,7 +173,7 @@ function importStudents_() {
     }
     store.replace('Students',records)
     const enrolled=records.filter(person=>person.id!==demoId&&person.active)
-    return {3:enrolled.filter(person=>person.group_no===3).length,4:enrolled.filter(person=>person.group_no===4).length}
+    return Object.fromEntries(classGroups.map(group=>[group,enrolled.filter(person=>person.group_no===group).length]))
   })
 }
 
@@ -331,7 +341,7 @@ function teacherRoute_(store,route,input,params) {
   const finished=selected.filter(exam=>inRange(exam.finished)).sort((a,b)=>b.finished-a.finished)
   const results=finished.map(exam=>({...summary_(exam),student:byId.get(exam.student)}))
   if (params.format==='csv') return '\uFEFF'+[['Nombre','Apellidos','Grupo','Fecha','Temas','Nota','Aciertos','Fallos','En blanco'],
-    ...results.map(r=>[r.student.first,r.student.last,r.student.group_no,new Date(r.finished).toISOString(),r.topics.join(' '),r.grade,r.right,r.wrong,r.blank])]
+    ...results.map(r=>[r.student.first,r.student.last,r.student.group_no==='DG'?'Doble Grado':r.student.group_no,new Date(r.finished).toISOString(),r.topics.join(' '),r.grade,r.right,r.wrong,r.blank])]
     .map(row=>row.map(csvCell_).join(';')).join('\r\n')
 
   const events=store.all('Access').filter(event=>includes(event.student))
@@ -368,7 +378,7 @@ function teacherRoute_(store,route,input,params) {
   const rate=q=>q.wrong/(q.total-q.blank)
   const rank=map=>[...map.values()].filter(q=>q.wrong).sort((a,b)=>rate(b)-rate(a)||b.wrong-a.wrong).slice(0,10)
   const average=values=>values.length?values.reduce((total,number)=>total+number,0)/values.length:null
-  const groups=[3,4].map(group=>{
+  const groups=classGroups.map(group=>{
     const members=students.filter(s=>s.active&&s.group_no===group&&includes(s.id))
     const groupResults=results.filter(r=>r.student.group_no===group)
     const scores=new Map()

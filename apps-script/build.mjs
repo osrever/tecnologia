@@ -40,7 +40,8 @@ function prepararPrueba() {
 function activarAlumnado() {
   requireOwner_()
   const counts = importStudents_()
-  console.log('Listados actualizados: grupo 3, ' + counts[3] + '; grupo 4, ' + counts[4] + '.')
+  const labels = classGroups.map(group=>(group==='DG'?'Doble Grado':'grupo '+group)+', '+counts[group])
+  console.log('Listados actualizados: '+labels.join('; ')+'.')
 }
 
 function prepararProfesorado() {

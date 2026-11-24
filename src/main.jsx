@@ -5,6 +5,7 @@ import './style.css'
 const date = value => new Intl.DateTimeFormat('es-ES',{dateStyle:'medium',timeStyle:'short',timeZone:'Europe/Madrid'}).format(value)
 const score = value => value==null ? '—' : value.toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2})
 const letter = i => 'ABCD'[i]
+const groupName = group => group==='DG' ? 'Doble Grado' : 'Grupo '+group
 const expectedOrigin = import.meta.env.VITE_APP_ORIGIN
 const scriptApi = globalThis.google?.script?.run
 async function api(path, data) {
@@ -144,7 +145,7 @@ function App() {
     <header className="top">
       <div className="shell course"><div className="mark" aria-hidden="true">TIC</div>
       <div><strong>Autoevaluación TIC Escrita</strong><div className="identity">Grado en Periodismo · Universidad de Sevilla</div></div>
-      {me && <div className="session">{me.student && <span>{me.student.first} {me.student.last} · Grupo {me.student.group_no}</span>}<button className="ghost" disabled={busy} onClick={logout}>Cerrar sesión</button></div>}
+      {me && <div className="session">{me.student && <span>{me.student.first} {me.student.last} · {groupName(me.student.group_no)}</span>}<button className="ghost" disabled={busy} onClick={logout}>Cerrar sesión</button></div>}
       </div>
     </header>
     <main id="contenido" className="shell">
@@ -153,12 +154,12 @@ function App() {
       {page==='landing' && <section className="card access">
         {title('Práctica para el examen','practice-title')}
         <p>Tecnologías para la Información y la Comunicación Escrita · 2710009</p>
-        <p>Curso 2026–2027 · Grupos 3 y 4</p>
+        <p>Curso 2026–2027 · Grupos 1–4 y Doble Grado</p>
         {expectedOrigin ? <a className="primary button" href={expectedOrigin}>Acceder a la aplicación</a> :
           <p className="notice">El acceso al alumnado se habilitará cuando esté configurado el servidor seguro y validado el banco de preguntas.</p>}
       </section>}
       {page==='login' && <section className="card access">
-        <div className="eyebrow">Curso 2026–2027 · Grupos 3 y 4</div>
+        <div className="eyebrow">Curso 2026–2027 · Grupos 1–4 y Doble Grado</div>
         {title(teacher?'Acceso del profesorado':'Práctica para el examen',teacher?undefined:'practice-title')}
         <p className="muted">Tecnologías para la Información y la Comunicación Escrita · 2710009</p>
         <form onSubmit={e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.currentTarget));action(async()=>{
@@ -222,7 +223,7 @@ function App() {
       </>}
       {page==='result' && result && <section className="card">
         {title('Resultado del examen')}
-        <p>{me.student.first} {me.student.last} · Grupo {me.student.group_no} · {date(result.finished)}</p>
+        <p>{me.student.first} {me.student.last} · {groupName(me.student.group_no)} · {date(result.finished)}</p>
         <p>{result.topics.map(topicName).join(' · ')}</p>
         <div className={'result '+(result.passed?'passed':'failed')}><strong>{score(result.grade)}</strong><span>sobre 10 · {result.passed?'Aprobado':'Suspenso'}</span></div>
         <p>{result.right} aciertos · {result.wrong} fallos · {result.blank} en blanco · {Math.floor(result.duration/60)} min {result.duration%60} s</p>
@@ -288,7 +289,7 @@ function Participation({results,name}) {
       ['Nota media de las pruebas',score(average(results.results))]
     ].map(([label,value])=><div className="card" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
     <section className="card section"><h2>Participación por grupo</h2>
-      {results.groups.map(g=><p key={g.group}>Grupo {g.group} · {g.students} de {g.enrolled} participantes ({percentage(g.students,g.enrolled)}) · {g.attempts} pruebas completadas · Nota media {score(g.average)} · Media de notas medias individuales {score(g.studentAverage)}</p>)}
+      {results.groups.map(g=><p key={g.group}>{groupName(g.group)} · {g.students} de {g.enrolled} participantes ({percentage(g.students,g.enrolled)}) · {g.attempts} pruebas completadas · Nota media {score(g.average)} · Media de notas medias individuales {score(g.studentAverage)}</p>)}
       <h2>Participantes por día</h2>
       {results.daily.length ? results.daily.map(day=><div className="history-row" key={day.day}>
         <span>{day.day.split('-').reverse().join('/')}</span>
@@ -296,7 +297,7 @@ function Participation({results,name}) {
       </div>) : <p>No hay accesos registrados en este período.</p>}
     </section>
     {person && <section className="card section">
-      <h2>{person.first} {person.last} · Grupo {person.group_no}</h2>
+      <h2>{person.first} {person.last} · {groupName(person.group_no)}</h2>
       <p>Primer acceso: {person.firstAccess==null?'—':date(person.firstAccess)} · Último acceso: {person.lastAccess==null?'—':date(person.lastAccess)}</p>
       <p>{person.sessions} sesiones iniciadas · {person.started} pruebas iniciadas · {individualResults.length} completadas</p>
       <p>Nota media: {score(average(individualResults))} · Mejor nota: {score(individualResults.length ? Math.max(...individualResults.map(r=>r.grade)) : null)}</p>
@@ -371,9 +372,9 @@ function Teacher({topics}) {
     {tab==='results' && <>
       <section className="card section">
         <div className="filters">
-          <label>Grupo<select value={filters.group??''} onChange={e=>search('group',e.target.value)}><option value="">Todos</option><option>3</option><option>4</option></select></label>
+          <label>Grupo<select value={filters.group??''} onChange={e=>search('group',e.target.value)}><option value="">Todos</option>{(results?.groups??[]).map(({group})=><option key={group} value={group}>{groupName(group)}</option>)}</select></label>
           <label>Estudiante<select value={filters.student??''} onChange={e=>search('student',e.target.value)}><option value="">Todos</option>
-            {results?.students.map(s=><option value={s.id} key={s.id}>{s.last}, {s.first} · G{s.group_no}</option>)}</select></label>
+            {results?.students.map(s=><option value={s.id} key={s.id}>{s.last}, {s.first} · {groupName(s.group_no)}</option>)}</select></label>
           <label>Tema<select value={filters.topic??''} onChange={e=>search('topic',e.target.value)}><option value="">Todos</option>
             {topics.map(t=><option value={t.id} key={t.id}>{t.title}</option>)}</select></label>
           <label>Desde<input type="date" value={filters.start??''} onChange={e=>search('start',e.target.value)}/></label>
@@ -390,7 +391,7 @@ function Teacher({topics}) {
           <h2>Intentos</h2>
           {results.results.length===0 ? <p>No hay intentos con estos filtros.</p> :
             <div className="table-wrap" tabIndex="0" aria-label="Tabla de intentos"><table><thead><tr>{['Estudiante','Grupo','Fecha','Temas','Nota','Duración'].map(label=><th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{results.results.map(r=><tr key={r.id}><th scope="row">{r.student.last}, {r.student.first}</th><td>{r.student.group_no}</td><td>{date(r.finished)}</td><td>{r.topics.join(', ')}</td><td>{score(r.grade)}</td><td>{Math.floor(r.duration/60)} min {r.duration%60} s</td></tr>)}</tbody></table></div>}
+            <tbody>{results.results.map(r=><tr key={r.id}><th scope="row">{r.student.last}, {r.student.first}</th><td>{groupName(r.student.group_no)}</td><td>{date(r.finished)}</td><td>{r.topics.join(', ')}</td><td>{score(r.grade)}</td><td>{Math.floor(r.duration/60)} min {r.duration%60} s</td></tr>)}</tbody></table></div>}
         </section>
         <section className="card section"><h2>Estadísticas por tema</h2>
           <div className="table-wrap" tabIndex="0" aria-label="Estadísticas por tema"><table>

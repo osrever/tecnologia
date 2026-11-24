@@ -23,9 +23,13 @@ const ctx=createContext({
     openById:id=>({getSheetByName:name=>{
       if (name==='Lista de clase') return {
         getLastRow:()=>9,
-        getRange:()=>({getDisplayValues:()=>id==='sheet-3'
-          ? [['Pruebas, Ana'],['Igual, Nombre'],['']]
-          : [['De prueba, Nombre'],['Igual, Nombre'],['']]})
+        getRange:()=>({getDisplayValues:()=>({
+          'sheet-1':[['Ensayo, Uno']],
+          'sheet-2':[['Ensayo, Dos']],
+          'sheet-3':[['Pruebas, Ana'],['Igual, Nombre'],['']],
+          'sheet-4':[['De prueba, Nombre'],['Igual, Nombre'],['']],
+          'sheet-DG':[['Ensayo, Doble']],
+        })[id]})
       }
       if (!database.has(name)) database.set(name,[])
       const data=database.get(name)
@@ -84,7 +88,7 @@ assert.equal(call('/exam/'+exam.id+'/review',null,paco).value.items.length,20)
 assert.equal(call('/history',null,paco).value.results.length,1)
 const teacher=call('/teacher/login',{code:secret}).token
 assert.equal(call('/teacher/results',null,teacher).value.results.length,0)
-assert.equal(call('/teacher/results',null,teacher).value.groups[1].students,1)
+assert.equal(call('/teacher/results',null,teacher).value.groups.find(group=>group.group===4).students,1)
 assert.match(call('/teacher/results?format=csv',null,teacher).value,/Nombre/)
 const bank=call('/teacher/bank',null,teacher)
 assert.equal(bank.value.length,questions.length)
@@ -111,6 +115,16 @@ for (let attempt=0;attempt<2;attempt++) {
   assert.ok(call('/login',{name:'Nombre Igual'}).error)
   assert.equal(call('/me',null,other).value.role,'student')
 }
+for (const group of [1,2,'DG']) identity.set('GROUP_'+group+'_SHEET_ID','sheet-'+group)
+const expanded=ctx.importStudents_()
+for (const group of [1,2,3,4,'DG']) assert.equal(expanded[group],1)
+for (const [name,group] of [['Uno Ensayo',1],['Dos Ensayo',2],['Doble Ensayo','DG']]) {
+  const session=call('/login',{name}).token
+  assert.equal(call('/me',null,session).value.student.group_no,group)
+}
+identity.delete('GROUP_DG_SHEET_ID')
+assert.equal(ctx.importStudents_().DG,1)
+assert.ok(call('/login',{name:'Doble Ensayo'}).token)
 assert.ok(call('/logout',{},paco).value)
 assert.ok(call('/me',null,paco).error)
 console.log('Apps Script: acceso, examen, revisión, historial, administración y exportación verificados localmente.')
